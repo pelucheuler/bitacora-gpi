@@ -321,12 +321,22 @@ def _nota_imagenes(transcripciones, fallidos, manual=False, adjuntas=False):
     return "No se leyeron las imágenes; si una diapositiva clave solo tiene imágenes, indícalo en alertas."
 
 
+CALIBRACIÓN = """CÓMO ASIGNAR LOS NIVELES (los evaluados son aprendices de nivel tecnólogo, no especialistas; la nota la valida siempre un instructor):
+- Nivel 1 SOLO cuando para ese criterio no hay ninguna evidencia en la presentación. Si aparece algo relacionado, aunque sea parcial, incompleto o con errores, el mínimo es nivel 2.
+- Nivel 3 cuando cumple lo esencial aunque tenga vacíos o detalles por mejorar. No exijas perfección para el nivel 3. Nivel 4 cuando está completo y bien sustentado.
+- Si dudas entre dos niveles, asigna el más alto y explica en la justificación qué falta para el siguiente.
+- Evalúa lo que la presentación muestra. Lo que normalmente se entrega como anexo (estudios completos, código del PLC, planos P&ID, hojas de cálculo, fichas técnicas) no se castiga si la diapositiva lo resume, lo muestra en parte o lo menciona; en ese caso cuenta como presente y solo recomienda verificarlo en el anexo.
+- La cantidad de diapositivas y el tiempo de exposición NO afectan ningún nivel (tampoco «Comunicación y formato»): van solo en "extension" como recomendación.
+- La bitácora (vistos buenos de instructores) es informativa: que falte un visto bueno NO baja ningún nivel ni se menciona en alertas.
+- Detalles menores de formato (mezcla de idiomas, tipografía) bajan como máximo un nivel en «Comunicación y formato»."""
+
+
 def _extension(stats):
     m = stats["minutos"]
     t = (f"TIEMPO DE EXPOSICIÓN: el grupo tiene {m} minutos para presentar. Como referencia, una diapositiva de contenido toma cerca de 1 minuto, así que lo razonable son unas {round(m * 0.8)} a {m} diapositivas incluyendo portada y conclusiones. La presentación tiene {stats['diapositivas']} diapositivas")
     if stats["densas"]:
         t += f" y estas tienen texto denso (más de 120 palabras, contando lo leído en imágenes): {', '.join(map(str, stats['densas']))}"
-    return t + (".\nREGLA PARA TODAS LAS RECOMENDACIONES: no pidas agregar diapositivas. Si falta contenido, di qué reemplazar, fusionar o condensar para que quepa, o qué llevar a un anexo (Excel o documento) que se entrega pero no se expone.")
+    return t + (".\nLa extensión es solo una recomendación: no afecta la nota. REGLA PARA TODAS LAS RECOMENDACIONES: no pidas agregar diapositivas. Si falta contenido, di qué reemplazar, fusionar o condensar para que quepa, o qué llevar a un anexo (Excel o documento) que se entrega pero no se expone.")
 
 
 EXT_SCHEMA = """"problematicas_sugeridas":[{"obj":N,"situacion":"posible situación problémica concreta para un objetivo que la presentación no cubre o cubre en nivel 1 o 2, basada en lo que la presentación muestra de la empresa (no inventes datos)","sustento":"diapositiva o dato que la sugiere","encaje":"en cuál situación problémica existente o diapositiva se puede integrar sin alargar la presentación","indicador":"indicador para medirla","datos_que_faltan":["dato que deben pedir a la empresa"]}],
@@ -341,7 +351,7 @@ def _bitacora_texto(bitacora):
     for o in OBJ8:
         b = bitacora.get(o["n"]) or {}
         vb = b.get("visto_bueno")
-        estado = "sin visto bueno"
+        estado = "sin registro todavía"
         if vb:
             estado = ("VISTO BUENO" if vb["estado"] == "aprobado" else "CON AJUSTES PENDIENTES") + f" del instructor técnico ({vb.get('fecha', '')})"
             if vb.get("observaciones"):
@@ -361,7 +371,7 @@ def prompt_avance(grupo, obj, px, transcripciones, fallidos, stats, manual=False
 
     o = OBJ[obj]
     evid = "; ".join(f"({i}) {e}" for i, e in enumerate(o["evid"], start=1))
-    prompt = f"""Eres un instructor evaluador del programa Tecnología en Gestión de la Producción Industrial (SENA, Colombia). Evalúa la presentación de avance del proyecto productivo de un grupo de aprendices con la rúbrica unificada. Sé exigente y justo, y basa cada juicio en lo que aparece en las diapositivas, citando su número.
+    prompt = f"""Eres un instructor evaluador del programa Tecnología en Gestión de la Producción Industrial (SENA, Colombia). Evalúa la presentación de avance del proyecto productivo de un grupo de aprendices con la rúbrica unificada. Sé justo y formativo, y basa cada juicio en lo que aparece en las diapositivas, citando su número.
 
 EMPRESA: {grupo.get('empresa', '')}.
 OBJETIVO QUE SE REVISA: {obj}. {o['objetivo']}.
@@ -370,6 +380,8 @@ EVIDENCIAS MÍNIMAS ESPERADAS PARA ESTE OBJETIVO: {evid}.
 
 RÚBRICA (nivel 4 a 1):
 {rubrica_texto()}
+
+{CALIBRACIÓN}
 
 {_nota_imagenes(transcripciones, fallidos, manual, adjuntas)}
 
@@ -384,7 +396,7 @@ Responde SOLO JSON:
  "evidencias_faltantes":["…"],
  "recomendaciones":["3 a 5 recomendaciones concretas y accionables para el grupo"],
  "oportunidades_mejora":["2 a 4 oportunidades de mejora del proyecto o de la propuesta de solución"],
- "alertas":["datos dudosos, cálculos que no cuadran, diapositivas solo con imágenes, contenido que no corresponde al objetivo"],
+ "alertas":["solo problemas de fondo: datos dudosos, cálculos que no cuadran, contenido que no corresponde al objetivo. No repitas aquí la extensión"],
  {EXT_SCHEMA}}}
 "problematicas_sugeridas" solo si este objetivo no aparece o su Aplicación técnica queda en nivel 1 o 2 (1 o 2 sugerencias); si no, deja la lista vacía."""
     return prompt
@@ -398,6 +410,8 @@ def procesar_avance(r):
         x = crit.get(c["id"], {})
         niveles.append(_nivel(x.get("nivel")))
         just.append(x.get("justificacion", ""))
+    if r.get("evidencias_encontradas"):
+        niveles = [max(2, n) for n in niveles]  # hay evidencia parcial: nunca nivel 1
     r["niveles"] = niveles
     r["justificaciones"] = just
     return r
@@ -412,7 +426,7 @@ def prompt_final(grupo, px, transcripciones, fallidos, stats, bitacora, manual=F
     from .pptx_lector import texto_diapositivas
 
     objs = "\n".join(f"Objetivo {o['n']} ({o['competencia']}): {o['objetivo']}. Evidencias: {'; '.join(o['evid'])}." for o in OBJ8)
-    prompt = f"""Eres un instructor evaluador del programa Tecnología en Gestión de la Producción Industrial (SENA, Colombia). Evalúa la PRESENTACIÓN FINAL del proyecto productivo de un grupo. La presentación debe desarrollar los 8 objetivos específicos a través de las propuestas de solución a las situaciones problémicas. Evalúa cada objetivo por separado con la misma rúbrica, basando cada juicio en lo que aparece en las diapositivas y citando su número. Si un objetivo no aparece, califícalo con nivel 1 en todos los criterios y dilo.
+    prompt = f"""Eres un instructor evaluador del programa Tecnología en Gestión de la Producción Industrial (SENA, Colombia). Evalúa la PRESENTACIÓN FINAL del proyecto productivo de un grupo. La presentación debe desarrollar los 8 objetivos específicos a través de las propuestas de solución a las situaciones problémicas. Evalúa cada objetivo por separado con la misma rúbrica, basando cada juicio en lo que aparece en las diapositivas y citando su número. Si un objetivo no aparece en ninguna diapositiva, califícalo con nivel 1 en todos los criterios y dilo; si aparece aunque sea parcialmente, aplica la calibración de abajo.
 
 EMPRESA: {grupo.get('empresa', '')}.
 OBJETIVOS Y EVIDENCIAS MÍNIMAS:
@@ -421,7 +435,9 @@ OBJETIVOS Y EVIDENCIAS MÍNIMAS:
 RÚBRICA (nivel 4 a 1):
 {rubrica_texto()}
 
-BITÁCORA DEL GRUPO (vistos buenos y observaciones de los instructores técnicos de cada competencia). Úsala para verificar que la presentación recoja lo aprobado y atienda las observaciones; si una observación no se atendió, dilo en el objetivo y en alertas:
+{CALIBRACIÓN}
+
+BITÁCORA DEL GRUPO (vistos buenos y observaciones de los instructores técnicos de cada competencia). Es solo contexto: si hay observaciones de ajustes y la presentación no las atendió, menciónalo en las recomendaciones de ese objetivo. Que falten vistos buenos no afecta los niveles ni va en alertas:
 {_bitacora_texto(bitacora)}
 
 {_nota_imagenes(transcripciones, fallidos, manual, adjuntas)}
@@ -435,7 +451,7 @@ Responde SOLO JSON. Justificaciones de máximo 25 palabras.
 {{"objetivos":[{{"obj":1,"diapositivas":"10-14","niveles":{{"c1":3,"c2":2,"c3":3,"c4":2,"c5":3}},"justificacion":"por qué esos niveles, citando diapositivas","faltantes":["evidencias mínimas que no aparecen"],"recomendaciones":["1 o 2 acciones concretas"]}}, …los 8…],
  "recomendaciones_generales":["3 a 5 recomendaciones para todo el proyecto"],
  "oportunidades_mejora":["3 a 5 oportunidades de mejora del proyecto y de sus propuestas de solución, para la empresa"],
- "alertas":["datos dudosos, cálculos que no cuadran, objetivos ausentes, observaciones de instructores no atendidas, diapositivas solo con imágenes"],
+ "alertas":["solo problemas de fondo: datos dudosos, cálculos que no cuadran, objetivos totalmente ausentes, contenido copiado o que no es de la empresa. No repitas aquí la extensión ni la bitácora"],
  {EXT_SCHEMA}}}
 En "problematicas_sugeridas" incluye 1 o 2 por cada objetivo ausente o con Aplicación técnica en nivel 1 o 2."""
     return prompt
@@ -453,6 +469,8 @@ def procesar_final(r):
         x = por_obj.get(o["n"], {})
         nv = x.get("niveles") or {}
         niveles = [_nivel(nv.get(c["id"])) for c in RUBRICA]
+        if _hay_diapositivas(x.get("diapositivas")):
+            niveles = [max(2, n) for n in niveles]  # hay evidencia parcial: nunca nivel 1
         objetivos.append({
             "obj": o["n"], "diapositivas": str(x.get("diapositivas") or ""), "niveles": niveles,
             "justificacion": x.get("justificacion") or "No se encontró en la presentación.",
@@ -460,6 +478,11 @@ def procesar_final(r):
         })
     r["objetivos"] = objetivos
     return r
+
+
+def _hay_diapositivas(v):
+    t = str(v or "").strip().lower()
+    return bool(re.search(r"\d", t)) and not t.startswith(("ningun", "no "))
 
 
 def _nivel(v):
