@@ -1,0 +1,5 @@
+streamlit>=1.50
+supabase>=2.20
+anthropic>=2.10
+pillow>=11
+pandas>=2.2

@@ -1,0 +1,349 @@
+{
+ "rubrica": [
+  {
+   "id": "c1",
+   "nombre": "Contexto y problema",
+   "peso": 0.15,
+   "n": [
+    "No hay problema definido o no corresponde a la competencia",
+    "Problema genérico o sin datos de la empresa",
+    "Problema claro y de la empresa, con datos parciales",
+    "Situación de la empresa real, cuantificada con 6 meses o más de datos y ligada al objetivo"
+   ]
+  },
+  {
+   "id": "c2",
+   "nombre": "Aplicación técnica",
+   "peso": 0.35,
+   "n": [
+    "No aplica las técnicas de la competencia",
+    "Menciona las técnicas pero las aplica mal o incompletas",
+    "Usa las técnicas con errores menores",
+    "Usa correctamente las técnicas de la competencia y justifica por qué las eligió"
+   ]
+  },
+  {
+   "id": "c3",
+   "nombre": "Datos y cálculos",
+   "peso": 0.2,
+   "n": [
+    "Sin cálculos o datos inventados",
+    "Cálculos con errores o sin soporte",
+    "Cálculos correctos con vacíos menores",
+    "Cálculos completos, verificables, con unidades y fuentes"
+   ]
+  },
+  {
+   "id": "c4",
+   "nombre": "Propuesta de solución e indicadores",
+   "peso": 0.2,
+   "n": [
+    "Sin propuesta",
+    "Propuesta vaga, sin indicador",
+    "Propuesta viable con indicador, sin meta o sin costo",
+    "Propuesta viable, con indicador antes y después, meta y costo o beneficio estimado"
+   ]
+  },
+  {
+   "id": "c5",
+   "nombre": "Comunicación y formato",
+   "peso": 0.1,
+   "n": [
+    "No sigue la plantilla",
+    "Desordenado o incompleto",
+    "Sigue la plantilla con fallas menores",
+    "Sigue la plantilla, gráficos legibles, ortografía y referencias correctas"
+   ]
+  }
+ ],
+ "objetivos": [
+  {
+   "n": 0,
+   "corto": "General",
+   "objetivo": "Contexto general de la empresa",
+   "competencia": "Contextualización de la organización",
+   "codigo": "—",
+   "horas": "",
+   "raps": [],
+   "evid": [
+    "Caracterización: CIIU, empleados, sistema productivo, ubicación",
+    "Misión y visión",
+    "Análisis del sector nacional y local",
+    "Clientes, proveedores y competencia",
+    "Portafolio de productos y diagrama técnico"
+   ],
+   "temas": []
+  },
+  {
+   "n": 1,
+   "corto": "Diagnóstico",
+   "objetivo": "Diagnosticar el estado actual del sistema productivo, que defina las condiciones iniciales del proceso",
+   "competencia": "Estandarización de procesos productivos",
+   "codigo": "220601022",
+   "horas": 384,
+   "raps": [
+    "Diagnosticar sistema de producción según tipo de proceso y entornos organizacionales",
+    "Caracterizar procesos de acuerdo con requisitos técnicos y normativos",
+    "Evaluar métodos de trabajo según requisitos técnicos y normativos",
+    "Estimar tiempos estándar operacionales",
+    "Proponer distribución de planta",
+    "Controlar documentación de procesos"
+   ],
+   "evid": [
+    "Tipo de sistema productivo (job shop, flow shop, MTO, MTS)",
+    "Diagnóstico del entorno (DOFA u otra herramienta)",
+    "Mapa de procesos o SIPOC",
+    "Matriz de riesgos",
+    "Cursograma o diagrama de flujo del método actual y del propuesto",
+    "Estudio de tiempos: muestra, valoración, suplementos, tiempo estándar",
+    "Plano de distribución de planta",
+    "Documentación y almacenamiento de la información"
+   ],
+   "temas": [
+    "Sistemas de producción",
+    "Lean y los 7 desperdicios",
+    "PHVA, SIPOC, mapa de procesos",
+    "Matriz de riesgos",
+    "Estudio de métodos y economía de movimientos",
+    "Estudio de tiempos y tiempo estándar",
+    "Distribución de planta",
+    "Gestión documental"
+   ]
+  },
+  {
+   "n": 2,
+   "corto": "Variables y control",
+   "objetivo": "Determinar variables del proceso productivo y método de control para el aseguramiento de requerimientos establecidos",
+   "competencia": "Control de variables de proceso",
+   "codigo": "220601020",
+   "horas": 384,
+   "raps": [
+    "Diagnosticar sistemas de gestión",
+    "Valorar variables con técnicas estadísticas",
+    "Evaluar métodos de control de procesos",
+    "Documentar sistema de producción",
+    "Elaborar plan con herramientas de mejoramiento continuo"
+   ],
+   "evid": [
+    "Planeación estratégica y sistema de gestión (ISO 9001, 14001, 45001, BPM)",
+    "Variables del proceso y su fuente de datos",
+    "Estadística descriptiva (Pareto, histograma, dispersión)",
+    "Plan de muestreo",
+    "Gráficos de control (X-R, p, np, c)",
+    "Capacidad del proceso Cp y Cpk",
+    "Indicadores KPI",
+    "Plan de mejora (5S, Kaizen, SMED, Poka Yoke, 5 porqués, Ishikawa)"
+   ],
+   "temas": [
+    "Sistemas de gestión",
+    "Analítica de datos",
+    "Estadística descriptiva e inferencial",
+    "Muestreo",
+    "Control estadístico de procesos",
+    "Capacidad de proceso",
+    "KPI y BSC",
+    "Mejoramiento continuo"
+   ]
+  },
+  {
+   "n": 3,
+   "corto": "Modelado matemático",
+   "objetivo": "Modelar matemáticamente situaciones problémicas, para utilizar eficientemente los recursos",
+   "competencia": "Razonar cuantitativamente",
+   "codigo": "240201528",
+   "horas": 48,
+   "raps": [
+    "Identificar modelos matemáticos según el problema planteado",
+    "Resolver problemas matemáticos del contexto productivo",
+    "Plantear problemas matemáticos del contexto productivo",
+    "Proponer acciones de mejora frente a los resultados"
+   ],
+   "evid": [
+    "Relación entre variables del proceso",
+    "Definición del problema a resolver",
+    "Planteamiento de ecuaciones o sistemas de ecuaciones",
+    "Procedimientos aritméticos y algebraicos",
+    "Conversiones de unidades",
+    "Cálculo de perímetros, áreas o volúmenes cuando aplique",
+    "Representación estadística de los datos",
+    "Verificación con herramienta computacional (hoja de cálculo)",
+    "Propuesta de solución a partir de los resultados"
+   ],
+   "temas": [
+    "Proporcionalidad y regla de tres",
+    "Ecuaciones y sistemas",
+    "Funciones",
+    "Geometría y conversiones",
+    "Estadística descriptiva",
+    "Hoja de cálculo"
+   ]
+  },
+  {
+   "n": 4,
+   "corto": "Cadena de abastecimiento",
+   "objetivo": "Gestionar la cadena de abastecimiento de la empresa para generar cadena de valor en el sistema productivo",
+   "competencia": "Supervisión del flujo de recursos",
+   "codigo": "220601037",
+   "horas": 384,
+   "raps": [
+    "Organizar cadena de abastecimiento",
+    "Evaluar compras",
+    "Configurar sistema de almacenamiento",
+    "Controlar inventarios",
+    "Elaborar sistema de transporte",
+    "Establecer estrategias de logística inversa"
+   ],
+   "evid": [
+    "Mapa de la cadena de abastecimiento",
+    "Flujo de información (ERP, MRP, WMS, códigos de barras)",
+    "Proceso de compras diagramado",
+    "Evaluación y clasificación de proveedores",
+    "Layout del almacén",
+    "Inventario y su valoración (Kardex, ABC)",
+    "Modelo de transporte",
+    "Estrategia de logística inversa y empaques"
+   ],
+   "temas": [
+    "Cadena de abastecimiento",
+    "Sistemas de información",
+    "Compras y proveedores",
+    "Almacenamiento",
+    "Inventarios y Kardex",
+    "Transporte y programación lineal",
+    "Logística inversa"
+   ]
+  },
+  {
+   "n": 5,
+   "corto": "Plan y costos",
+   "objetivo": "Elaborar el plan de producción y determinar el costo, con el fin de cuantificar los recursos necesarios del proceso",
+   "competencia": "Planeación del sistema productivo",
+   "codigo": "220601070",
+   "horas": 336,
+   "raps": [
+    "Estimar demanda",
+    "Evaluar capacidad",
+    "Establecer costos",
+    "Organizar inventarios",
+    "Integrar recursos"
+   ],
+   "evid": [
+    "Familia de productos y horizonte de planeación",
+    "Pronóstico de demanda con error (MAD, MAPE, señal de rastreo)",
+    "Capacidad teórica, efectiva y real; turnos",
+    "Costos de producción y costo por orden",
+    "Modelo de inventario (EOQ, punto de reorden, inventario de seguridad)",
+    "Plan agregado",
+    "Plan maestro de producción"
+   ],
+   "temas": [
+    "Planeación y ERP",
+    "Demanda y pronósticos",
+    "Error de pronóstico",
+    "Capacidad (CRP, takt time)",
+    "Costos y sistemas de costos",
+    "Inventarios y EOQ",
+    "Plan agregado y PMP"
+   ]
+  },
+  {
+   "n": 6,
+   "corto": "Talento humano",
+   "objetivo": "Gestionar las actividades del personal, para aumentar el desempeño del recurso humano de la empresa",
+   "competencia": "Coordinación del talento humano",
+   "codigo": "210201052",
+   "horas": 144,
+   "raps": [
+    "Verificar procedimientos según legislación laboral y reglamento interno",
+    "Estructurar plan de trabajo según perfil del cargo",
+    "Caracterizar plan de mejoramiento (capacitación y desempeño)",
+    "Proyectar estrategias de bienestar"
+   ],
+   "evid": [
+    "Organigrama y legislación aplicable",
+    "Perfil de cargo",
+    "Programación de turnos",
+    "Matriz de polivalencia",
+    "Presupuesto de nómina",
+    "Programa de capacitación",
+    "Evaluación de desempeño",
+    "Plan de bienestar"
+   ],
+   "temas": [
+    "Código Sustantivo del Trabajo",
+    "SG-SST",
+    "Perfil de cargo",
+    "Turnos y polivalencia",
+    "Nómina",
+    "Capacitación y desempeño",
+    "Liderazgo y conflictos"
+   ]
+  },
+  {
+   "n": 7,
+   "corto": "Programación",
+   "objetivo": "Programar las actividades de producción a partir de los recursos disponibles para aumentar índices de competitividad",
+   "competencia": "Programación de procesos productivos",
+   "codigo": "220601048",
+   "horas": 288,
+   "raps": [
+    "Organizar proceso",
+    "Optimizar cargas",
+    "Valorar cargas",
+    "Validar programa de producción",
+    "Controlar programa de producción"
+   ],
+   "evid": [
+    "Rutas de fabricación y configuración (flow shop, job shop)",
+    "Cargas de trabajo y diagrama de Gantt",
+    "Asignación (método húngaro u otro)",
+    "Secuenciación (Johnson, reglas de despacho, Palmer, CDS)",
+    "Balanceo de línea",
+    "Restricciones (TOC)",
+    "Programa de producción",
+    "Indicadores (OEE, lead time, eficiencia)"
+   ],
+   "temas": [
+    "Programación a corto plazo",
+    "Configuración de procesos",
+    "Cargas y Gantt",
+    "Asignación",
+    "Líneas de espera",
+    "Secuenciación",
+    "Balanceo de líneas",
+    "Manufactura de clase mundial"
+   ]
+  },
+  {
+   "n": 8,
+   "corto": "Equipos de control",
+   "objetivo": "Definir herramientas y equipos tecnológicos del proceso productivo, con el fin de posicionar la empresa en el mercado",
+   "competencia": "Programación de equipo de control de procesos",
+   "codigo": "280401042",
+   "horas": 288,
+   "raps": [
+    "Establecer instrumentos de control",
+    "Configurar controladores lógicos programables",
+    "Verificar variables"
+   ],
+   "evid": [
+    "Variables del proceso a controlar",
+    "Instrumentos y su clasificación (primarios, secundarios, finales)",
+    "Diagrama de control o P&ID",
+    "Arquitectura del PLC y conexiones",
+    "Programa (escalera, bloques o texto estructurado) con simulación",
+    "Propuesta de HMI o SCADA",
+    "Registro de variables"
+   ],
+   "temas": [
+    "Instrumentación",
+    "Neumática y electroneumática",
+    "PLC",
+    "Álgebra de Boole",
+    "Lenguajes IEC 61131-3",
+    "SCADA, HMI, IoT",
+    "Comunicación industrial"
+   ]
+  }
+ ]
+}
