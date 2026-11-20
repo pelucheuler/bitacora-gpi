@@ -529,8 +529,11 @@ def evaluar(grupo, perfil, arch, tipo, obj, minutos, leer):
         try:
             st.write("Leyendo el archivo…")
             px = leer_pptx(data)
-            trans, fallidos = {}, 0
-            if leer:
+            trans, fallidos, adj = {}, 0, None
+            if leer and ia.proveedor() == "gemini":
+                adj = ia.imagenes_para_gemini(px, imagenes_relevantes(px)) or None
+                st.write(f"Enviando el texto y {len(adj or [])} imágenes en una sola solicitud…")
+            elif leer:
                 items = imagenes_relevantes(px)
                 if items:
                     barra = st.progress(0.0, text=f"Leyendo {len(items)} imágenes…")
@@ -538,13 +541,14 @@ def evaluar(grupo, perfil, arch, tipo, obj, minutos, leer):
             stats = estadisticas(px, trans, int(minutos))
             st.write("Aplicando la rúbrica…")
             if tipo == "final":
-                r = ia.evaluar_final(grupo, px, trans, fallidos, stats, bitacora_para_ia(grupo["id"]))
+                r = ia.evaluar_final(grupo, px, trans, fallidos, stats, bitacora_para_ia(grupo["id"]), imagenes=adj)
                 n_prop, ap = nota_final(r["objetivos"]), aprueba_final(r["objetivos"])
             else:
-                r = ia.evaluar_avance(grupo, obj, px, trans, fallidos, stats)
+                r = ia.evaluar_avance(grupo, obj, px, trans, fallidos, stats, imagenes=adj)
                 n_prop, ap = nota(r["niveles"]), aprueba(r["niveles"])
             r.update({"nota_propuesta": n_prop, "aprueba_propuesta": ap, "stats": stats,
-                      "imagenes_leidas": len(trans), "lotes_fallidos": fallidos})
+                      "imagenes_leidas": len(adj) if adj else len(trans), "lotes_fallidos": fallidos,
+                      "via": ia.proveedor()})
             guardar_revision(grupo, perfil, arch.name, data, tipo, obj, px, r, trans)
             stt.update(label="Evaluación lista", state="complete")
         except ia.IAError as e:
@@ -654,8 +658,9 @@ def mostrar_revision(r, perfil, staff):
         u = db.urls_firmadas([r["archivo_ruta"]]).get(r["archivo_ruta"])
         if u:
             st.link_button("⬇ Descargar la presentación", u)
-    st.caption(f"{r.get('diapositivas') or '?'} diapositivas · " + ("revisada en claude.ai" if p.get("via") == "claude.ai"
-               else f"{p.get('imagenes_leidas', 0)} diapositivas con imágenes leídas"))
+    via = {"claude.ai": "revisada en claude.ai", "gemini": "revisada con Gemini", "claude": "revisada con Claude"}.get(p.get("via"), "")
+    st.caption(f"{r.get('diapositivas') or '?'} diapositivas · " + (via + " · " if via else "")
+               + (f"{p.get('imagenes_leidas', 0)} imágenes leídas" if p.get("via") != "claude.ai" else "imágenes leídas desde el PDF"))
 
     if r["estado"] == "validada":
         res = r.get("resultado") or {}
@@ -959,7 +964,9 @@ def main():
                 st.session_state.gid = ids[0]
             gid = st.selectbox("Grupo", ids, key="gid", format_func=lambda i: next(f"{g['nombre']} · {g['empresa']}" for g in grupos if g["id"] == i))
             grupo = next(g for g in grupos if g["id"] == gid)
-        if not ia.disponible():
+        if ia.proveedor() == "gemini":
+            st.caption("🤖 IA: Gemini (plan gratuito, con cupo diario limitado).")
+        elif not ia.disponible():
             st.caption("🤖 IA: se usa con su propia cuenta de claude.ai (copiar y pegar).")
         st.divider()
         if st.button("Cerrar sesión"):

@@ -1,12 +1,17 @@
-"""Llamadas a Claude (API de Anthropic) para la bitácora GPI.
+"""Llamadas a la IA para la bitácora GPI.
 
-La clave va en los secretos de Streamlit (ANTHROPIC_API_KEY). El modelo se puede cambiar
-con el secreto MODELO_IA. Se activan los "fallbacks" del lado del servidor: si el modelo
-principal declina una solicitud, la API la reintenta con el modelo alterno recomendado.
+Proveedor según los secretos de Streamlit:
+- ANTHROPIC_API_KEY  -> Claude (API de Anthropic, pago por uso). Modelo: MODELO_IA.
+  Se activan los "fallbacks" del lado del servidor: si el modelo principal declina una
+  solicitud, la API la reintenta con el modelo alterno recomendado.
+- GEMINI_API_KEY     -> Gemini (Google AI Studio, plan gratuito). Modelos: GEMINI_MODELO
+  (revisión de PPT) y GEMINI_MODELO_LIGERO (fotos, alternativas, retroalimentación).
+- ninguna            -> modo copiar/pegar en claude.ai (ver app.py, bloque_claude).
 """
 import base64
 import json
 import re
+import time
 
 import anthropic
 import streamlit as st
@@ -28,16 +33,104 @@ def _cliente():
     return anthropic.Anthropic(api_key=clave, max_retries=3)
 
 
+def proveedor():
+    if st.secrets.get("ANTHROPIC_API_KEY", ""):
+        return "claude"
+    if st.secrets.get("GEMINI_API_KEY", ""):
+        return "gemini"
+    return None
+
+
 def disponible() -> bool:
-    return bool(st.secrets.get("ANTHROPIC_API_KEY", ""))
+    return proveedor() is not None
+
+
+# ---------------------------------------------------------------- Gemini
+# Plan gratuito (nov. 2026, aprox.): Flash ~5 por minuto y ~20 por día; Flash-Lite ~15 por minuto
+# y ~500 por día. Por eso la PPT completa va en UNA sola solicitud (texto + imágenes) al modelo
+# Flash, y lo demás usa Flash-Lite. Si un modelo ya no existe, se prueba el siguiente.
+GEMINI_PESADOS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-flash-latest"]
+GEMINI_LIGEROS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-lite-latest"]
+
+
+@st.cache_resource
+def _gemini():
+    from google import genai
+    return genai.Client(api_key=st.secrets["GEMINI_API_KEY"])
+
+
+def _modelos_gemini(pesado):
+    pes = [st.secrets.get("GEMINI_MODELO", "")] + GEMINI_PESADOS
+    lig = [st.secrets.get("GEMINI_MODELO_LIGERO", "")] + GEMINI_LIGEROS
+    orden = (pes + lig) if pesado else lig
+    vistos, out = set(), []
+    for m in orden:
+        if m and m not in vistos:
+            vistos.add(m)
+            out.append(m)
+    return out
+
+
+def _llamar_gemini(prompt, imagenes, max_tokens, json_mode, pesado):
+    from google.genai import errors, types
+
+    partes = []
+    for im in imagenes or []:
+        if isinstance(im, tuple):
+            partes.append(im[0])
+            im = im[1]
+        partes.append(types.Part.from_bytes(data=im, mime_type="image/jpeg"))
+    partes.append(prompt)
+    cfg = types.GenerateContentConfig(max_output_tokens=max(max_tokens, 16000),
+                                      response_mime_type="application/json" if json_mode else None)
+    ultimo = ""
+    for modelo in _modelos_gemini(pesado):
+        for intento in range(2):
+            try:
+                r = _gemini().models.generate_content(model=modelo, contents=partes, config=cfg)
+                texto = (r.text or "").strip()
+                if not texto:
+                    raise IAError("Gemini no devolvió respuesta (puede haber bloqueado el contenido). Intente de nuevo.")
+                return texto
+            except errors.ClientError as e:
+                msg = str(getattr(e, "message", "") or e)
+                if e.code == 404:
+                    ultimo = f"El modelo {modelo} no está disponible."
+                    break  # siguiente modelo
+                if e.code == 429:
+                    completo = str(e).lower()
+                    por_dia = "perday" in completo.replace("_", "") or "per day" in completo or "daily" in completo
+                    if not por_dia and intento == 0:
+                        time.sleep(35)  # límite por minuto: esperar y reintentar una vez
+                        continue
+                    ultimo = ("Se agotó el cupo gratuito diario de Gemini." if por_dia
+                              else "Se alcanzó el límite por minuto de Gemini.")
+                    break  # probar el siguiente modelo (los ligeros tienen más cupo)
+                if e.code in (400, 401, 403) and ("api key" in str(e).lower() or "permission" in str(e).lower()):
+                    raise IAError("La clave GEMINI_API_KEY no es válida. Revise los Secrets de la app.")
+                raise IAError(f"Gemini no aceptó la solicitud: {msg[:300]}")
+            except errors.ServerError:
+                if intento == 0:
+                    time.sleep(5)
+                    continue
+                ultimo = "Gemini está saturado en este momento."
+                break
+    raise IAError(ultimo + " Intente más tarde (el cupo diario se renueva cada día).")
+
+
+def llamar(prompt: str, imagenes=None, esfuerzo: str = "medium", max_tokens: int = 16000,
+           json_mode: bool = False, pesado: bool = False) -> str:
+    if proveedor() == "gemini":
+        return _llamar_gemini(prompt, imagenes, max_tokens, json_mode, pesado)
+    return _llamar_claude(prompt, [im[1] if isinstance(im, tuple) else im for im in (imagenes or [])], esfuerzo, max_tokens)
 
 
 def _modelo() -> str:
     return st.secrets.get("MODELO_IA", MODELO_POR_DEFECTO)
 
 
-def llamar(prompt: str, imagenes=None, esfuerzo: str = "medium", max_tokens: int = 16000) -> str:
-    """Envía el prompt (y fotos JPEG opcionales) y devuelve el texto de la respuesta."""
+def _llamar_claude(prompt: str, imagenes=None, esfuerzo: str = "medium", max_tokens: int = 16000) -> str:
+    """Envía el prompt (y fotos JPEG opcionales) a Claude y devuelve el texto de la respuesta."""
     contenido = [
         {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
                                      "data": base64.standard_b64encode(b).decode("utf-8")}}
@@ -74,7 +167,7 @@ FIN_JSON = "\n\nResponde ÚNICAMENTE con el objeto JSON, sin texto antes ni desp
 
 
 def llamar_json(prompt: str, **kw) -> dict:
-    return extraer_json(llamar(prompt + FIN_JSON, **kw))
+    return extraer_json(llamar(prompt + FIN_JSON, json_mode=True, **kw))
 
 
 def extraer_json(texto: str) -> dict:
@@ -212,9 +305,14 @@ Responde SOLO JSON: {{"imagenes":[{{"diapositiva":N,"contenido":"..."}}]}}"""
 NOTA_PDF = ("Si junto a estas instrucciones se adjuntó la presentación en PDF, úsala como fuente principal: lee en sus páginas las tablas, gráficas, diagramas y capturas pegados como imagen, y verifica los cálculos y la coherencia de las cifras entre diapositivas. El texto extraído que va abajo sirve para ubicar los números de diapositiva. Si no hay PDF y una diapositiva clave solo tiene imágenes, indícalo en alertas.")
 
 
-def _nota_imagenes(transcripciones, fallidos, manual=False):
+NOTA_ADJUNTAS = ("Antes de estas instrucciones se adjuntan las imágenes de las diapositivas (tablas, gráficas, diagramas y capturas pegados como imagen), cada una precedida por la etiqueta «Imagen de la diapositiva N». Léelas como parte de la presentación y verifica los cálculos y la coherencia de las cifras entre diapositivas.")
+
+
+def _nota_imagenes(transcripciones, fallidos, manual=False, adjuntas=False):
     if manual:
         return NOTA_PDF
+    if adjuntas:
+        return NOTA_ADJUNTAS
     if transcripciones:
         t = ('Las imágenes de las diapositivas (tablas, gráficas, diagramas y capturas pegados como imagen) ya fueron transcritas y aparecen dentro de cada diapositiva como "[Contenido leído de las imágenes]". Trátalas como parte de la presentación. Verifica los cálculos y la coherencia de las cifras entre diapositivas.')
         if fallidos:
@@ -253,11 +351,12 @@ def _bitacora_texto(bitacora):
     return "\n".join(lineas)
 
 
-def evaluar_avance(grupo, obj, px, transcripciones, fallidos, stats):
-    return procesar_avance(llamar_json(prompt_avance(grupo, obj, px, transcripciones, fallidos, stats), esfuerzo="high"))
+def evaluar_avance(grupo, obj, px, transcripciones, fallidos, stats, imagenes=None):
+    p = prompt_avance(grupo, obj, px, transcripciones, fallidos, stats, adjuntas=bool(imagenes))
+    return procesar_avance(llamar_json(p, imagenes=imagenes, esfuerzo="high", pesado=True))
 
 
-def prompt_avance(grupo, obj, px, transcripciones, fallidos, stats, manual=False):
+def prompt_avance(grupo, obj, px, transcripciones, fallidos, stats, manual=False, adjuntas=False):
     from .pptx_lector import texto_diapositivas
 
     o = OBJ[obj]
@@ -272,7 +371,7 @@ EVIDENCIAS MÍNIMAS ESPERADAS PARA ESTE OBJETIVO: {evid}.
 RÚBRICA (nivel 4 a 1):
 {rubrica_texto()}
 
-{_nota_imagenes(transcripciones, fallidos, manual)}
+{_nota_imagenes(transcripciones, fallidos, manual, adjuntas)}
 
 {_extension(stats)}
 
@@ -304,11 +403,12 @@ def procesar_avance(r):
     return r
 
 
-def evaluar_final(grupo, px, transcripciones, fallidos, stats, bitacora):
-    return procesar_final(llamar_json(prompt_final(grupo, px, transcripciones, fallidos, stats, bitacora), esfuerzo="high", max_tokens=24000))
+def evaluar_final(grupo, px, transcripciones, fallidos, stats, bitacora, imagenes=None):
+    p = prompt_final(grupo, px, transcripciones, fallidos, stats, bitacora, adjuntas=bool(imagenes))
+    return procesar_final(llamar_json(p, imagenes=imagenes, esfuerzo="high", max_tokens=24000, pesado=True))
 
 
-def prompt_final(grupo, px, transcripciones, fallidos, stats, bitacora, manual=False):
+def prompt_final(grupo, px, transcripciones, fallidos, stats, bitacora, manual=False, adjuntas=False):
     from .pptx_lector import texto_diapositivas
 
     objs = "\n".join(f"Objetivo {o['n']} ({o['competencia']}): {o['objetivo']}. Evidencias: {'; '.join(o['evid'])}." for o in OBJ8)
@@ -324,7 +424,7 @@ RÚBRICA (nivel 4 a 1):
 BITÁCORA DEL GRUPO (vistos buenos y observaciones de los instructores técnicos de cada competencia). Úsala para verificar que la presentación recoja lo aprobado y atienda las observaciones; si una observación no se atendió, dilo en el objetivo y en alertas:
 {_bitacora_texto(bitacora)}
 
-{_nota_imagenes(transcripciones, fallidos, manual)}
+{_nota_imagenes(transcripciones, fallidos, manual, adjuntas)}
 
 {_extension(stats)}
 
@@ -372,3 +472,16 @@ def _nivel(v):
 def para_claude_ai(prompt: str) -> str:
     """Instrucciones listas para pegar en claude.ai (modo sin clave de API)."""
     return prompt + "\n\nEntrega la respuesta completa como un único bloque de código JSON, sin texto adicional."
+
+
+def imagenes_para_gemini(px, items, maximo=60):
+    """Imágenes de las diapositivas con su etiqueta, para enviarlas en la misma solicitud."""
+    from .pptx_lector import a_jpeg
+
+    out = []
+    for it in items[:maximo]:
+        try:
+            out.append((f"Imagen de la diapositiva {it['slide']}:", a_jpeg(px["zip"].read(it["path"]), 1280, 80)))
+        except Exception:
+            pass
+    return out

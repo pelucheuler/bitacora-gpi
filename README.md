@@ -14,7 +14,7 @@ Todo queda guardado en Supabase (base de datos y archivos), así que no se pierd
 | Supabase | Base de datos, fotos/archivos e inicio de sesión | Gratis (500 MB de datos, 1 GB de archivos) |
 | Streamlit Community Cloud | Publica la app en una dirección web | Gratis |
 | GitHub | Guarda el código para que Streamlit lo publique | Gratis |
-| Claude | IA: describir fotos, proponer problemas, revisar PPT | Gratis con la cuenta de claude.ai de cada uno (copiar y pegar), o automático con clave de API (pago por uso) |
+| IA | Describir fotos, proponer problemas, revisar PPT | Gemini gratis (automático, con cupo diario), claude.ai de cada uno (copiar y pegar) o Claude por API (pago por uso) |
 
 ---
 
@@ -34,7 +34,28 @@ Todo queda guardado en Supabase (base de datos y archivos), así que no se pierd
 
 ### 2. Decidir cómo usar la IA
 
-**Opción A: con la cuenta de claude.ai de cada uno (gratis, la que está usando).** No configure ninguna clave. En cada lugar donde la app usa IA aparece un recuadro **"Instrucciones para Claude"**:
+La app elige sola según la clave que ponga en los Secrets de Streamlit: si hay `ANTHROPIC_API_KEY` usa Claude; si no, y hay `GEMINI_API_KEY`, usa Gemini; si no hay ninguna, usa el modo copiar/pegar en claude.ai.
+
+**Opción recomendada para empezar: Gemini gratis (automático).**
+
+1. Entre a <https://aistudio.google.com> con una cuenta de Google y acepte los términos.
+2. Pulse **Get API key → Create API key** (si pide proyecto, deje el que crea por defecto). Copie la clave (empieza por `AIza`).
+3. En Streamlit: su app → **⋮ → Settings → Secrets**, agregue esta línea debajo de las de Supabase y guarde:
+
+   ```toml
+   GEMINI_API_KEY = "AIza...su clave..."
+   ```
+
+   La app se reinicia sola y desde ese momento los botones dicen **"🤖 … con IA"**.
+
+Cupo gratuito aproximado (Google lo cambia sin aviso; véalo en <https://aistudio.google.com/rate-limit>):
+- **Revisar una PPT** usa el modelo Gemini Flash: unas **20 revisiones al día** y 5 por minuto para todo el proyecto. Cada PPT va en una sola solicitud con su texto y sus imágenes.
+- **Fotos, alternativas de problema y retroalimentación** usan Gemini Flash-Lite: unas 500 al día.
+- Si se acaba el cupo de Flash, la app intenta con Flash-Lite; si también se acaba, avisa y hay que esperar al día siguiente (se renueva a medianoche de California, 3 a. m. de Colombia).
+
+⚠️ **Privacidad**: en el plan gratuito, Google puede usar lo que se envía (texto de la PPT, fotos de la empresa) para mejorar sus productos, y personas de Google pueden revisarlo. No suba datos confidenciales de la empresa ni datos personales. Si las empresas lo exigen, use el plan pago de Gemini o Claude por API.
+
+**Opción sin clave: con la cuenta de claude.ai de cada uno (copiar y pegar).** Si no pone ninguna clave. En cada lugar donde la app usa IA aparece un recuadro **"Instrucciones para Claude"**:
 
 1. La app prepara las instrucciones (con la rúbrica, las evidencias o el texto de la PPT).
 2. Usted abre <https://claude.ai> con su cuenta, conversación nueva, pega las instrucciones (o adjunta el .txt) y, según el caso, adjunta las fotos o la PPT guardada como **PDF**.
@@ -42,7 +63,7 @@ Todo queda guardado en Supabase (base de datos y archivos), así que no se pierd
 
 Funciona para: describir fotos, proponer alternativas de problema, retroalimentar el análisis y revisar la PPT (avance o final). Con el plan gratuito de claude.ai una PPT final grande puede agotar el límite del día; con Pro alcanza de sobra.
 
-**Opción B: automática con clave de API (pago por uso).** Si más adelante quiere que todo sea con un clic, cree una clave en <https://console.anthropic.com> (Billing → cargar saldo y poner límite; API Keys → Create Key) y agréguela en los Secrets de Streamlit como `ANTHROPIC_API_KEY`. La app cambia sola al modo automático. Costo aproximado: describir 5 fotos USD 0,05; proponer alternativas USD 0,10–0,20; PPT final de 35 diapositivas con ~40 imágenes USD 1–1,50.
+**Opción Claude por API (pago por uso).** Si más adelante quiere que todo sea con un clic, cree una clave en <https://console.anthropic.com> (Billing → cargar saldo y poner límite; API Keys → Create Key) y agréguela en los Secrets de Streamlit como `ANTHROPIC_API_KEY`. La app cambia sola al modo automático. Costo aproximado: describir 5 fotos USD 0,05; proponer alternativas USD 0,10–0,20; PPT final de 35 diapositivas con ~40 imágenes USD 1–1,50.
 
 ### 3. Subir el código a GitHub
 
@@ -61,7 +82,7 @@ Funciona para: describir fotos, proponer alternativas de problema, retroalimenta
    SUPABASE_ANON_KEY = "la clave anon / publishable"
    ```
 
-   (Solo si eligió la opción B, agregue también `ANTHROPIC_API_KEY = "sk-ant-..."`.)
+   (Agregue también `GEMINI_API_KEY = "AIza..."` para usar Gemini, o `ANTHROPIC_API_KEY = "sk-ant-..."` para Claude por API.)
 
 4. Pulse **Deploy**. En uno o dos minutos tendrá la dirección de la app (algo como `https://bitacora-gpi.streamlit.app`).
 

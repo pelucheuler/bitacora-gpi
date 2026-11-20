@@ -3,3 +3,4 @@ supabase>=2.20
 anthropic>=2.10
 pillow>=11
 pandas>=2.2
+google-genai>=1.30
