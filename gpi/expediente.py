@@ -3,6 +3,7 @@ import base64
 import html
 from datetime import datetime
 
+from . import marca
 from .catalogo import OBJ, OBJ8, RUBRICA, etiqueta, nota
 
 e = lambda s: html.escape(str(s or ""))
@@ -28,14 +29,15 @@ def construir(grupo, integrantes, nombres, asign, evid, anal, vistos, revs, foto
     partes = [f"""<!doctype html><html lang="es"><head><meta charset="utf-8">
 <title>Expediente {e(grupo['nombre'])}</title>
 <style>
-body{{font-family:system-ui,Segoe UI,Arial,sans-serif;max-width:900px;margin:24px auto;padding:0 16px;color:#1d2a1d;line-height:1.45}}
-h1{{color:#2d7d00;margin-bottom:0}} h2{{border-bottom:3px solid #39a900;padding-bottom:4px;margin-top:32px}}
+body{{font-family:Work Sans,Segoe UI,Calibri,Arial,sans-serif;max-width:900px;margin:24px auto;padding:0 16px;color:#1d2a1d;line-height:1.45}}
+h1{{color:#00304D;margin-bottom:0}} h2{{color:#00304D;border-bottom:3px solid #39a900;padding-bottom:4px;margin-top:32px}}
 h3{{margin-bottom:4px}} .muted{{color:#5c6b5c}} table{{border-collapse:collapse;width:100%;font-size:.9rem}}
-td,th{{border:1px solid #cdd8cd;padding:4px 6px;text-align:left;vertical-align:top}} th{{background:#eef6e8}}
+td,th{{border:1px solid #cdd8cd;padding:4px 6px;text-align:left;vertical-align:top}} th{{background:#eef7e6;color:#00304D}}
 .ok{{color:#1f7a00;font-weight:600}} .warn{{color:#a35b00;font-weight:600}}
 .thumbs img{{height:110px;margin:2px;border:1px solid #ccc}} .box{{background:#f6faf3;border-left:4px solid #39a900;padding:8px 12px;margin:8px 0}}
 @media print{{h2{{break-before:auto}} .obj{{break-inside:avoid-page}}}}
-</style></head><body>
+{marca.css_informe()}</style></head><body>
+{marca.encabezado_informe()}
 <h1>Expediente del proyecto productivo</h1>
 <p class="muted">Tecnología en Gestión de la Producción Industrial · Generado el {datetime.now().strftime('%d/%m/%Y %H:%M')}</p>
 <table><tr><th>Grupo</th><td>{e(grupo['nombre'])}</td><th>Ficha</th><td>{e(grupo.get('ficha'))}</td></tr>
@@ -105,3 +107,72 @@ td,th{{border:1px solid #cdd8cd;padding:4px 6px;text-align:left;vertical-align:t
                 partes.append(f"<h3>{etq}</h3>" + lista(r[k].split("\n")))
     partes.append("</body></html>")
     return "".join(partes)
+
+
+def informe_revision(grupo, integrantes, r, nombres, mostrar_nota=True):
+    """Informe de una revisión de presentación (HTML; se abre en Word o se imprime a PDF)."""
+    p = r.get("propuesta") or {}
+    final = r["tipo"] == "final"
+    validada = r["estado"] == "validada"
+    res = r.get("resultado") or {}
+    titulo = "Presentación final" if final else f"Avance · {etiqueta(r['obj'])}"
+    h = [f"""<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Informe de revisión {e(grupo['nombre'])}</title>
+<style>
+body{{font-family:Work Sans,Calibri,Segoe UI,Arial,sans-serif;max-width:900px;margin:24px auto;padding:0 16px;color:#1d2a1d;line-height:1.4}}
+h1{{color:#00304D;margin-bottom:0}} h2{{color:#00304D;border-bottom:2px solid #39a900;padding-bottom:3px;margin-top:24px}}
+table{{border-collapse:collapse;width:100%;font-size:10pt}} td,th{{border:1px solid #9fb59f;padding:4px 6px;text-align:left;vertical-align:top}}
+th{{background:#eef7e6;color:#00304D}} .muted{{color:#5c6b5c}} .nota{{font-size:16pt;font-weight:bold}}
+{marca.css_informe()}</style></head><body>
+{marca.encabezado_informe()}
+<h1>Informe de revisión del proyecto productivo</h1>
+<p class="muted">Tecnología en Gestión de la Producción Industrial · {e(titulo)}</p>
+<table><tr><th>Grupo</th><td>{e(grupo['nombre'])}</td><th>Ficha</th><td>{e(grupo.get('ficha'))}</td></tr>
+<tr><th>Empresa proyecto</th><td>{e(grupo['empresa'])}</td><th>Fecha de revisión</th><td>{fecha(r['creado_en'])}</td></tr>
+<tr><th>Integrantes</th><td colspan="3">{e(', '.join(m['nombre'] or m['correo'] for m in integrantes))}</td></tr>
+<tr><th>Archivo</th><td>{e(r.get('archivo_nombre'))} ({r.get('diapositivas') or '?'} diapositivas)</td><th>Estado</th>
+<td>{'Validada por ' + e(nombres.get(r.get('validado_por'), 'el instructor')) + ' el ' + fecha(r.get('validado_en')) if validada else 'Pendiente de validación por el instructor'}</td></tr></table>"""]
+    if validada:
+        h.append(f"<p class='nota'>Nota: {e(r['nota'])} · {'Aprueba' if r['aprueba'] else 'No aprueba'}</p>")
+    elif mostrar_nota:
+        h.append(f"<p class='nota'>Nota propuesta por la IA: {e(p.get('nota_propuesta'))} (sin validar)</p>")
+    if mostrar_nota or validada:
+        h.append("<h2>Rúbrica</h2><table><tr><th>Objetivo</th>" + "".join(f"<th>{e(c['nombre'])} ({round(c['peso'] * 100)}%)</th>" for c in RUBRICA)
+                 + "<th>Nota</th>" + ("<th>Justificación</th>" if final else "") + "</tr>")
+        if final:
+            prop = {x["obj"]: x for x in p.get("objetivos") or []}
+            filas = res.get("objetivos") if validada and res.get("objetivos") else p.get("objetivos") or []
+            for x in filas:
+                pr = prop.get(x["obj"], {})
+                h.append(f"<tr><td>{e(etiqueta(x['obj']))}<br><span class='muted'>diap. {e(pr.get('diapositivas'))}</span></td>"
+                         + "".join(f"<td>{v}</td>" for v in x["niveles"]) + f"<td><b>{nota(x['niveles'])}</b></td><td>{e(pr.get('justificacion'))}</td></tr>")
+        else:
+            nv = res.get("niveles") if validada and res.get("niveles") else p.get("niveles") or []
+            h.append(f"<tr><td>{e(etiqueta(r['obj']))}</td>" + "".join(f"<td>{v}</td>" for v in nv) + f"<td><b>{nota(nv) if nv else ''}</b></td></tr>")
+        h.append("</table><p class='muted'>Niveles de 1 a 4. Nota = 1 + 4/3 × (Σ peso × nivel − 1).</p>")
+    recs = r.get("recomendaciones") if validada else "\n".join((p.get("recomendaciones_generales") if final else p.get("recomendaciones")) or [])
+    opo = r.get("oportunidades") if validada else "\n".join(p.get("oportunidades_mejora") or [])
+    for etq, txt in (("Recomendaciones", recs), ("Oportunidades de mejora", opo), ("Observaciones del instructor", r.get("observaciones") if validada else "")):
+        if txt:
+            h.append(f"<h2>{etq}</h2>" + lista(txt.split("\n")))
+    if final:
+        det = [x for x in p.get("objetivos") or [] if x.get("faltantes") or x.get("recomendaciones")]
+        if det:
+            h.append("<h2>Detalle por objetivo</h2>")
+            for x in det:
+                h.append(f"<p><b>{e(etiqueta(x['obj']))}</b></p>" + (f"<p>Falta: {e('; '.join(x['faltantes']))}</p>" if x.get("faltantes") else "") + lista(x.get("recomendaciones")))
+    ext = p.get("extension")
+    if ext:
+        s = p.get("stats") or {}
+        h.append(f"<h2>Extensión para la exposición ({s.get('minutos', 15)} min)</h2><p>{s.get('diapositivas', '?')} diapositivas. "
+                 + ("Adecuada." if ext.get("adecuada") else f"Conviene condensar a unas {e(ext.get('diapositivas_recomendadas'))}.") + f" {e(ext.get('comentario'))}</p>"
+                 + lista([f"Diap. {c.get('diapositivas', '')}: {c.get('sugerencia', '')}" for c in ext.get("condensar") or []])
+                 + (f"<p>Mover a anexos: {e('; '.join(ext['anexos']))}</p>" if ext.get("anexos") else ""))
+    sug = p.get("problematicas_sugeridas") or []
+    if sug:
+        h.append("<h2>Problemáticas sugeridas para objetivos sin cubrir</h2>" + lista(
+            [f"Objetivo {x.get('obj')}: {x.get('situacion', '')}" + (f" Integrar en: {x['encaje']}." if x.get("encaje") else "")
+             + (f" Indicador: {x['indicador']}." if x.get("indicador") else "") for x in sug]))
+    if p.get("alertas"):
+        h.append("<h2>Alertas</h2>" + lista(p["alertas"]))
+    h.append("<p class='muted'>Informe generado por la Bitácora del Proyecto Productivo GPI. La nota la valida el instructor.</p></body></html>")
+    return "".join(h)

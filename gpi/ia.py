@@ -331,16 +331,30 @@ CALIBRACIÓN = """CÓMO ASIGNAR LOS NIVELES (los evaluados son aprendices de niv
 - Detalles menores de formato (mezcla de idiomas, tipografía) bajan como máximo un nivel en «Comunicación y formato»."""
 
 
-def _extension(stats):
+def rango_diapositivas(stats, final):
+    """Rango razonable de diapositivas para el tiempo de exposición."""
     m = stats["minutos"]
-    t = (f"TIEMPO DE EXPOSICIÓN: el grupo tiene {m} minutos para presentar. Como referencia, una diapositiva de contenido toma cerca de 1 minuto, así que lo razonable son unas {round(m * 0.8)} a {m} diapositivas incluyendo portada y conclusiones. La presentación tiene {stats['diapositivas']} diapositivas")
+    if final:  # portada y contexto + 2 a 3 por cada uno de los 8 objetivos + cierre
+        return max(18, round(m * 1.33)), max(23, round(m * 1.67))
+    return max(6, round(m * 0.8)), max(9, round(m * 1.2))
+
+
+def _extension(stats, final=False):
+    m = stats["minutos"]
+    lo, hi = rango_diapositivas(stats, final)
+    base = ("Al ser la presentación final con 8 objetivos, lo razonable es portada y contexto, 2 a 3 diapositivas por objetivo y cierre"
+            if final else "Como referencia, una diapositiva de contenido toma cerca de 1 minuto")
+    t = (f"TIEMPO DE EXPOSICIÓN: el grupo tiene {m} minutos para presentar. {base}: unas {lo} a {hi} diapositivas en total. "
+         f"La presentación tiene {stats['diapositivas']} diapositivas")
     if stats["densas"]:
         t += f" y estas tienen texto denso (más de 120 palabras, contando lo leído en imágenes): {', '.join(map(str, stats['densas']))}"
-    return t + (".\nLa extensión es solo una recomendación: no afecta la nota. REGLA PARA TODAS LAS RECOMENDACIONES: no pidas agregar diapositivas. Si falta contenido, di qué reemplazar, fusionar o condensar para que quepa, o qué llevar a un anexo (Excel o documento) que se entrega pero no se expone.")
+    return t + (f'.\nEn "extension": "adecuada" es true si tiene {hi + 3} diapositivas o menos; "diapositivas_recomendadas" debe estar entre {lo} y {hi}. '
+                "Usa un tono constructivo y práctico: no uses palabras como «imposible», «drástica», «excesiva» o «depuración»; di qué conviene fusionar o llevar a anexos y por qué ayuda a la exposición. "
+                "La extensión es solo una recomendación: no afecta la nota. REGLA PARA TODAS LAS RECOMENDACIONES: no pidas agregar diapositivas. Si falta contenido, di qué reemplazar, fusionar o condensar para que quepa, o qué llevar a un anexo (Excel o documento) que se entrega pero no se expone.")
 
 
 EXT_SCHEMA = """"problematicas_sugeridas":[{"obj":N,"situacion":"posible situación problémica concreta para un objetivo que la presentación no cubre o cubre en nivel 1 o 2, basada en lo que la presentación muestra de la empresa (no inventes datos)","sustento":"diapositiva o dato que la sugiere","encaje":"en cuál situación problémica existente o diapositiva se puede integrar sin alargar la presentación","indicador":"indicador para medirla","datos_que_faltan":["dato que deben pedir a la empresa"]}],
- "extension":{"adecuada":true,"diapositivas_recomendadas":12,"comentario":"1 o 2 frases sobre si cabe en el tiempo","condensar":[{"diapositivas":"4-7","sugerencia":"qué fusionar o resumir"}],"anexos":["contenido que conviene mover a anexos"]}"""
+ "extension":{"adecuada":true,"diapositivas_recomendadas":20,"comentario":"1 o 2 frases, en tono constructivo, sobre cómo ajustarla al tiempo","condensar":[{"diapositivas":"4-7","sugerencia":"qué fusionar o resumir"}],"anexos":["contenido que conviene mover a anexos"]}"""
 
 
 def _bitacora_texto(bitacora):
@@ -442,7 +456,7 @@ BITÁCORA DEL GRUPO (vistos buenos y observaciones de los instructores técnicos
 
 {_nota_imagenes(transcripciones, fallidos, manual, adjuntas)}
 
-{_extension(stats)}
+{_extension(stats, final=True)}
 
 CONTENIDO ({len(px['slides'])} diapositivas):
 {texto_diapositivas(px, transcripciones, 160000)}

@@ -82,6 +82,11 @@ def actualizar_grupo(gid, datos):
     T("grupos").update(datos).eq("id", gid).execute()
 
 
+def crear_mi_grupo(nombre, ficha, empresa, sector):
+    """Aprendiz: crea el grupo (o se une si ya existe uno con la misma ficha y empresa)."""
+    return cliente().rpc("crear_mi_grupo", {"p_nombre": nombre, "p_ficha": ficha, "p_empresa": empresa, "p_sector": sector}).execute().data
+
+
 def unirse_grupo(codigo):
     return cliente().rpc("unirse_grupo", {"cod": codigo}).execute().data
 
@@ -222,3 +227,11 @@ def resumen_todos():
         "finales": T("revisiones").select("grupo_id, tipo, estado, nota, aprueba, creado_en").eq("tipo", "final").order("creado_en", desc=True).execute().data,
         "asignaciones": T("asignaciones").select("*").execute().data,
     }
+
+
+def revisiones_resumen():
+    """Revisiones sin el contenido pesado de la PPT (para tablero y descargas)."""
+    return (T("revisiones")
+            .select("id, grupo_id, tipo, obj, estado, nota, aprueba, diapositivas, archivo_nombre, creado_en, validado_en, resultado, "
+                    "prop_objetivos:propuesta->objetivos, prop_niveles:propuesta->niveles, prop_nota:propuesta->nota_propuesta")
+            .order("creado_en", desc=True).execute().data)

@@ -1,0 +1,13 @@
+LOGO DEL SENA (opcional)
+
+Guarde aquí el logo oficial del SENA con este nombre exacto:
+
+    logo_sena.png
+
+Recomendado: PNG con fondo transparente, unos 300 px de alto.
+Use el archivo oficial que entrega el SENA (manual de identidad o comunicaciones de su centro);
+no lo modifique ni lo deforme.
+
+Si el archivo está, la app lo muestra en la pantalla de ingreso, en la barra lateral, en la pestaña
+del navegador y en los informes descargables (expediente e informe de revisión).
+Si no está, la app funciona igual, sin logo.

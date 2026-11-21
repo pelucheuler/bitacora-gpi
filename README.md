@@ -114,9 +114,23 @@ Funciona para: describir fotos, proponer alternativas de problema, retroalimenta
 
 **Validar una PPT** → *Presentación*: elija la revisión pendiente, ajuste los niveles (1 a 4) donde no esté de acuerdo con la IA, edite recomendaciones y oportunidades de mejora, y pulse **Validar y publicar la nota**. En la PPT final la IA también compara la presentación con los vistos buenos y observaciones de la bitácora.
 
+**Informe de revisión** → *Presentación*, sobre cada revisión: **⬇ Informe en Word** (.doc, se abre y edita en Word) o **⬇ Informe para PDF** (ábralo e *Imprimir → Guardar como PDF*). Los aprendices descargan el informe sin la nota hasta que el instructor la valide.
+
+**Tablero** → tres pestañas: *Notas de las presentaciones* (nota por objetivo de la última PPT final de cada grupo, promedios y gráfico por competencia), *Bitácora y vistos buenos* (avance del trimestre en la app) y *Descargar datos* (Excel con 3 hojas o CSV, listo para Power BI: Obtener datos → Libro de Excel).
+
+**Muchos grupos** → en el menú lateral los instructores filtran por **Ficha** y **Solo mis grupos** (los que crearon o donde son instructor técnico), y el selector de grupo permite escribir para buscar. El Tablero usa los mismos filtros.
+
+**Crear grupos sin el líder** → los instructores crean grupos en *Administración*. Los aprendices también pueden: en **Mi cuenta → ¿Su grupo aún no existe?** un integrante lo crea (nombre, ficha, empresa) y comparte el código; si ya existía un grupo de esa ficha con la misma empresa, la app lo une a ese en lugar de duplicarlo.
+
 **Expediente** → botón *📄 Expediente* en la bitácora: descarga un HTML con todo (evidencias con miniaturas, análisis, vistos buenos, nota final). Ábralo y use *Imprimir → Guardar como PDF*.
 
 Rúbrica unificada: Contexto y problema 15 %, Aplicación técnica 35 %, Datos y cálculos 20 %, Propuesta de solución e indicadores 20 %, Comunicación y formato 10 %. Nota = 1 + 4/3·(Σ peso·nivel − 1). Aprueba con 3,5 o más y ningún criterio en nivel 1; en la final, promedio de los 8 objetivos y todos aprobados.
+
+## Imagen institucional e instructivos
+
+- **Colores**: la app usa la paleta institucional del SENA (verde `#39A900`, azul oscuro `#00304D`, verde oscuro `#007832`) y la letra Work Sans. Se cambian en `.streamlit/config.toml` y `gpi/marca.py`.
+- **Logo**: guarde el logo oficial del SENA como `assets/logo_sena.png` (PNG, fondo transparente). Aparece en el ingreso, la barra lateral, la pestaña del navegador y los informes descargables. Sin ese archivo la app funciona igual.
+- **Instructivos**: `instructivos/` trae el de aprendices y el de instructores en Word y PDF. Dentro de la app están en el menú **Ayuda** y en la pestaña **¿Cómo funciona?** de la pantalla de ingreso. Para cambiarlos, edite los `.md` (los ve la app) y vuelva a generar el Word/PDF.
 
 ---
 
@@ -137,11 +151,16 @@ gpi/catalogo.json       8 objetivos/competencias, RAP, evidencias esperadas y r�
 gpi/ia.py               instrucciones a la IA (fotos, alternativas, retroalimentación, PPT)
 gpi/pptx_lector.py      lectura de la PPT y de sus imágenes
 gpi/datos.py            conexión con Supabase
-gpi/expediente.py       expediente descargable
+gpi/expediente.py       expediente e informe de revisión descargables
+gpi/reportes.py         tablas del tablero y Excel para Power BI
+gpi/marca.py            colores institucionales SENA y logo
+assets/                 aquí va el logo oficial (logo_sena.png)
+instructivos/           instructivos para aprendices e instructores (md, Word, PDF)
 supabase_schema.sql     tablas, permisos y almacenamiento (se pega en Supabase)
 actualizacion_v2.sql    solo para quien ya había instalado la versión 1 (contraseña temporal)
+actualizacion_v3.sql    aprendices crean su grupo + corrección de seguridad de roles
 requirements.txt        librerías de Python
-.streamlit/config.toml  colores y tamaño máximo de archivos
+.streamlit/config.toml  colores SENA, letra y tamaño máximo de archivos
 ```
 
 Para cambiar competencias, evidencias esperadas o la rúbrica, edite `gpi/catalogo.json` en GitHub; Streamlit vuelve a publicar la app solo.

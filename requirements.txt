@@ -4,3 +4,4 @@ anthropic>=2.10
 pillow>=11
 pandas>=2.2
 google-genai>=1.30
+openpyxl>=3.1

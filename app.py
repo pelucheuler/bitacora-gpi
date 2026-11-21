@@ -1,20 +1,20 @@
 """Bitácora del Proyecto Productivo GPI · Streamlit + Supabase + Claude."""
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 
 from gpi import datos as db
 from gpi import ia
+from gpi import marca
 from gpi.catalogo import OBJ, OBJ8, RUBRICA, aprueba, aprueba_final, etiqueta, nota, nota_final
 from gpi.pptx_lector import a_jpeg, estadisticas, imagenes_relevantes, leer_pptx
 
-st.set_page_config(page_title="Bitácora Proyecto Productivo GPI", page_icon="📒", layout="wide")
-st.markdown("""<style>
-h1,h2,h3{color:#2d7d00} [data-testid="stMetricValue"]{font-size:1.1rem}
-.estado{font-size:.85rem;padding:2px 8px;border-radius:10px;background:#eef6e8}
-.celda{font-size:.82rem;line-height:1.3;background:#f6faf3;border-radius:8px;padding:6px 8px;min-height:3.4rem}
-</style>""", unsafe_allow_html=True)
+st.set_page_config(page_title="Bitácora Proyecto Productivo GPI", page_icon=str(marca.logo_ruta()) if marca.logo_ruta() else "📒", layout="wide")
+st.markdown(marca.CSS_APP, unsafe_allow_html=True)
+if marca.logo_ruta():
+    st.logo(str(marca.logo_ruta()), size="large")
 
 IMG_TIPOS = ["jpg", "jpeg", "png", "webp"]
 DOC_TIPOS = ["xlsx", "xls", "csv", "pdf", "docx", "doc", "pptx", "txt"]
@@ -50,9 +50,14 @@ def configurada():
 
 
 def pantalla_acceso():
-    st.title("📒 Bitácora del Proyecto Productivo")
-    st.caption("Tecnología en Gestión de la Producción Industrial")
-    t1, t2, t3 = st.tabs(["Ingresar", "Crear cuenta", "Olvidé mi contraseña"])
+    if marca.logo_ruta():
+        st.image(str(marca.logo_ruta()), width=110)
+    st.title("Bitácora del Proyecto Productivo")
+    st.caption("SENA · Tecnología en Gestión de la Producción Industrial")
+    t1, t2, t3, t4 = st.tabs(["Ingresar", "Crear cuenta", "Olvidé mi contraseña", "❓ ¿Cómo funciona?"])
+    with t4:
+        st.write("Descargue el instructivo según su rol. Dentro de la app también está en el menú «Ayuda».")
+        botones_instructivo(["aprendices", "instructores"], "acc")
     with t1, st.form("login"):
         correo = st.text_input("Correo")
         clave = st.text_input("Contraseña", type="password")
@@ -124,7 +129,7 @@ def pagina_bitacora(grupo, perfil):
     st.title(f"📒 {grupo['nombre']}")
     st.caption(f"Empresa proyecto: **{grupo['empresa']}**" + (f" · {grupo['sector']}" if grupo.get("sector") else "")
                + (f" · Ficha {grupo['ficha']}" if grupo.get("ficha") else "")
-               + (f" · Código para unirse: `{grupo['codigo']}`" if staff else ""))
+               + f" · Código para unirse: `{grupo['codigo']}`")
     if integrantes:
         st.caption("Integrantes: " + ", ".join(m["nombre"] or m["correo"] for m in integrantes))
 
@@ -520,7 +525,7 @@ def pagina_presentacion(grupo, perfil):
     if st.session_state.get(f"rsel_{gid}") not in por_id:
         st.session_state[f"rsel_{gid}"] = revs[0]["id"]
     rid = st.selectbox("Revisión", list(por_id), format_func=lambda i: etq(por_id[i]), key=f"rsel_{gid}")
-    mostrar_revision(por_id[rid], perfil, staff)
+    mostrar_revision(por_id[rid], perfil, staff, grupo)
 
 
 def evaluar(grupo, perfil, arch, tipo, obj, minutos, leer):
@@ -632,7 +637,7 @@ def _extras(p):
         s = p.get("stats") or {}
         with st.container(border=True):
             st.markdown(f"**Extensión para {s.get('minutos', 15)} minutos** · {s.get('diapositivas', '?')} diapositivas · "
-                        + ("✅ adecuada" if ext.get("adecuada") else f"⚠️ debe condensar (recomendado: {ext.get('diapositivas_recomendadas', '?')})"))
+                        + ("✅ adecuada" if ext.get("adecuada") else f"💡 conviene condensar (sugerido: unas {ext.get('diapositivas_recomendadas', '?')})"))
             if ext.get("comentario"):
                 st.write(ext["comentario"])
             for c in ext.get("condensar") or []:
@@ -651,9 +656,28 @@ def _extras(p):
         st.warning(a)
 
 
-def mostrar_revision(r, perfil, staff):
+def botones_informe(grupo, r, staff):
+    from gpi import expediente
+
+    try:
+        integrantes = db.miembros(grupo["id"])
+        nombres = nombres_de(db.perfiles() if staff else integrantes + db.perfiles(["instructor", "lider"]))
+    except Exception:
+        integrantes, nombres = [], {}
+    html = expediente.informe_revision(grupo, integrantes, r, nombres, mostrar_nota=staff)
+    base = f"informe-{grupo['nombre']}-{'final' if r['tipo'] == 'final' else 'obj' + str(r['obj'])}-{fecha(r['creado_en']).replace('/', '-')}"
+    c1, c2, _ = st.columns([1, 1, 2])
+    c1.download_button("⬇ Informe en Word", ("\ufeff" + html).encode("utf-8"), file_name=base + ".doc",
+                       mime="application/msword", key=f"iw_{r['id']}")
+    c2.download_button("⬇ Informe para PDF", html.encode("utf-8"), file_name=base + ".html", mime="text/html",
+                       key=f"ih_{r['id']}", help="Ábralo y use Imprimir → Guardar como PDF")
+
+
+def mostrar_revision(r, perfil, staff, grupo=None):
     p = r.get("propuesta") or {}
     final = r["tipo"] == "final"
+    if grupo:
+        botones_informe(grupo, r, staff)
     if r.get("archivo_ruta"):
         u = db.urls_firmadas([r["archivo_ruta"]]).get(r["archivo_ruta"])
         if u:
@@ -749,42 +773,127 @@ def _abrir(gid, obj):
     st.session_state.pagina = "Bitácora del grupo"
 
 
-def pagina_tablero(perfil):
+def filtrar_grupos(grupos, perfil):
+    """Filtros del menú lateral para instructores: ficha y «mis grupos»."""
+    fichas = sorted({(g.get("ficha") or "").strip() for g in grupos if (g.get("ficha") or "").strip()})
+    ficha = st.selectbox("Ficha", ["Todas"] + fichas, key="f_ficha")
+    mios = st.checkbox("Solo mis grupos", key="f_mios", help="Grupos que usted creó o donde es instructor técnico de alguna competencia")
+    if ficha != "Todas":
+        grupos = [g for g in grupos if (g.get("ficha") or "").strip() == ficha]
+    if mios:
+        try:
+            asg = {a["grupo_id"] for a in db.asignaciones() if a["instructor_id"] == perfil["id"]}
+        except Exception:
+            asg = set()
+        grupos = [g for g in grupos if g["id"] in asg or g.get("creado_por") == perfil["id"]]
+    st.caption(f"{len(grupos)} grupo(s)")
+    return grupos
+
+
+def pagina_tablero(perfil, grupos):
+    from gpi import reportes
+
     st.title("📊 Avance de los grupos")
     try:
-        grupos = [g for g in db.grupos_visibles() if g["activo"]]
         R = db.resumen_todos()
+        revs = db.revisiones_resumen()
     except Exception as e:
         falla(e)
         return
     if not grupos:
-        st.info("No hay grupos. Créelos en Administración.")
+        st.info("No hay grupos con este filtro. Cambie el filtro del menú lateral o cree grupos en Administración.")
         return
-    filas, pendientes = [], []
+    t1, t2, t3 = st.tabs(["📈 Notas de las presentaciones", "📒 Bitácora y vistos buenos", "⬇ Descargar datos (Excel / Power BI)"])
+
+    # ---------------- notas
+    with t1:
+        filas, finales = [], []
+        for g in grupos:
+            r = reportes.ultima_final(revs, g["id"])
+            fila = {"Ficha": g.get("ficha") or "", "Grupo": g["nombre"], "Empresa": g["empresa"]}
+            pares = dict(reportes._niveles_final(r)) if r else {}
+            for o in OBJ8:
+                nv = pares.get(o["n"])
+                fila[corto(o["n"])] = nota(nv) if nv else None
+            if r:
+                validada = r["estado"] == "validada"
+                fila["Nota final"] = r["nota"] if validada else r.get("prop_nota")
+                fila["Estado"] = "✅ Validada" if validada else "⏳ Propuesta IA"
+                finales.append((g, r, pares))
+            else:
+                fila["Nota final"] = None
+                fila["Estado"] = "Sin PPT final"
+            filas.append(fila)
+        val = [r for _, r, _ in finales if r["estado"] == "validada"]
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Grupos", len(grupos))
+        c2.metric("Con PPT final revisada", len(finales))
+        c3.metric("Nota promedio (validadas)", f"{sum(float(r['nota']) for r in val) / len(val):.1f}" if val else "—")
+        c4.metric("Aprueban (validadas)", f"{sum(1 for r in val if r['aprueba'])} de {len(val)}" if val else "—")
+        st.caption("Nota de cada objetivo en la última PPT final del grupo (1.0 a 5.0). Si el instructor ya la validó se usa esa; "
+                   "si no, la propuesta de la IA. Vacío = el grupo aún no tiene PPT final revisada.")
+        cfg = {corto(o["n"]): st.column_config.NumberColumn(corto(o["n"]), format="%.1f") for o in OBJ8}
+        cfg["Nota final"] = st.column_config.NumberColumn("Nota final", format="%.1f")
+        st.dataframe(pd.DataFrame(filas), hide_index=True, column_config=cfg)
+        if finales:
+            prom = []
+            for o in OBJ8:
+                v = [nota(p[o["n"]]) for _, _, p in finales if p.get(o["n"])]
+                if v:
+                    prom.append({"Objetivo": corto(o["n"]), "Nota promedio": round(sum(v) / len(v), 2)})
+            if prom:
+                st.markdown("**Nota promedio por objetivo** (todos los grupos filtrados): muestra qué competencias necesitan más refuerzo.")
+                st.bar_chart(pd.DataFrame(prom), x="Objetivo", y="Nota promedio", color="#39A900", horizontal=True, height=320)
+
+    # ---------------- bitácora
+    pendientes, filas_b = [], []
     for g in grupos:
         ev = [x for x in R["evidencias"] if x["grupo_id"] == g["id"]]
         an = [x for x in R["analisis"] if x["grupo_id"] == g["id"]]
         vb = [x for x in R["vistos"] if x["grupo_id"] == g["id"]]
-        fin = next((x for x in R["finales"] if x["grupo_id"] == g["id"]), None)
-        fila = {"Grupo": g["nombre"], "Empresa": g["empresa"]}
+        fila = {"Ficha": g.get("ficha") or "", "Grupo": g["nombre"], "Empresa": g["empresa"], "Evidencias": len(ev)}
         for o in OBJ8:
             est = estado_objetivo(o["n"], ev, an, vb)
-            fila[f"{o['n']}. {o['corto']}"] = ICONO[est]
+            fila[corto(o["n"])] = f"{ICONO[est]} {TEXTO_ESTADO[est]}" if est != "vacio" else "—"
             asg = next((a for a in R["asignaciones"] if a["grupo_id"] == g["id"] and a["obj"] == o["n"]), None)
             if est == "enviado" and (perfil["rol"] == "lider" or (asg and asg["instructor_id"] == perfil["id"])):
                 pendientes.append((g, o))
-        fila["Vistos buenos"] = sum(1 for o in OBJ8 if fila[f"{o['n']}. {o['corto']}"] == "✅")
-        fila["PPT final"] = (f"{fin['nota']}" if fin and fin["estado"] == "validada" else "⏳" if fin else "—")
-        filas.append(fila)
-    st.caption(" · ".join(f"{ICONO[k]} {TEXTO_ESTADO[k]}" for k in ICONO))
-    st.dataframe(pd.DataFrame(filas), hide_index=True)
-    st.subheader("Pendientes de su visto bueno")
-    if not pendientes:
-        st.success("No tiene análisis pendientes por revisar.")
-    for g, o in pendientes:
-        c1, c2 = st.columns([4, 1])
-        c1.markdown(f"**{g['nombre']}** ({g['empresa']}) · {etiqueta(o['n'])}")
-        c2.button("Abrir", key=f"open_{g['id']}_{o['n']}", on_click=_abrir, args=(g["id"], o["n"]))
+        fila["Vistos buenos"] = f"{sum(1 for o in OBJ8 if fila[corto(o['n'])].startswith('✅'))} de 8"
+        filas_b.append(fila)
+    with t2:
+        st.caption("Avance de la bitácora durante el trimestre: evidencias que sube el grupo, análisis del problema y visto bueno del "
+                   "instructor técnico de cada competencia. Aparece «—» mientras el grupo no haya cargado nada de esa competencia en la app; "
+                   "no depende de la PPT.")
+        st.caption(" · ".join(f"{ICONO[k]} {TEXTO_ESTADO[k]}" for k in ICONO))
+        st.dataframe(pd.DataFrame(filas_b), hide_index=True)
+        st.subheader("Pendientes de su visto bueno")
+        if not pendientes:
+            st.success("No tiene análisis pendientes por revisar.")
+        for g, o in pendientes:
+            c1, c2 = st.columns([4, 1])
+            c1.markdown(f"**{g['nombre']}** ({g['empresa']}) · {etiqueta(o['n'])}")
+            c2.button("Abrir", key=f"open_{g['id']}_{o['n']}", on_click=_abrir, args=(g["id"], o["n"]))
+
+    # ---------------- descargas
+    with t3:
+        largo = reportes.notas_largo(grupos, revs)
+        tab_rev = reportes.revisiones_tabla(grupos, revs)
+        bit = pd.DataFrame([{**{k: v for k, v in f.items()}} for f in filas_b])
+        st.write("Descargue los datos de los grupos filtrados para analizarlos en Excel o alimentar un tablero en **Power BI**.")
+        st.markdown(
+            "- **Notas_por_objetivo**: una fila por grupo, revisión y objetivo, con los 5 criterios y la nota (formato ideal para Power BI).\n"
+            "- **Revisiones**: una fila por PPT revisada, con nota propuesta, nota validada y si aprueba.\n"
+            "- **Bitacora**: estado de cada competencia por grupo.")
+        nombre = "bitacora-gpi-" + datetime.now().strftime("%Y%m%d")
+        st.download_button("⬇ Descargar Excel (3 hojas)", reportes.excel({"Notas_por_objetivo": largo, "Revisiones": tab_rev, "Bitacora": bit}),
+                           file_name=nombre + ".xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary")
+        st.download_button("⬇ Notas por objetivo (CSV)", largo.to_csv(index=False).encode("utf-8-sig"), file_name=nombre + "-notas.csv", mime="text/csv")
+        with st.expander("Cómo usarlo en Power BI"):
+            st.markdown(
+                "1. Power BI Desktop → **Obtener datos → Libro de Excel** → elija el archivo y marque las 3 hojas.\n"
+                "2. Con la hoja **Notas_por_objetivo** arme, por ejemplo: matriz *grupo × objetivo* con promedio de `nota_objetivo`, "
+                "barras de promedio por `competencia`, y un segmentador por `ficha` y `estado`.\n"
+                "3. Para actualizar, descargue de nuevo el Excel con el mismo nombre de archivo y pulse **Actualizar** en Power BI.")
 
 
 # ======================================================================= administración
@@ -919,17 +1028,70 @@ def pagina_cuenta(perfil):
                 except Exception as e:
                     falla(e)
     if perfil["rol"] == "aprendiz":
+        try:
+            mios = db.mis_grupos(perfil["id"])
+        except Exception:
+            mios = []
+        if mios:
+            st.markdown("**Mis grupos** (compartan el código con sus compañeros para que se unan)\n" +
+                        "\n".join(f"- {g['nombre']} · {g['empresa']} · ficha {g.get('ficha') or '—'} · código `{g['codigo']}`" for g in mios))
+        st.markdown("**¿Ya tienen grupo?** Únase con el código que le dio su instructor o un compañero.")
         with st.form("unirse"):
-            cod = st.text_input("Código de grupo (se lo da su instructor)")
+            cod = st.text_input("Código de grupo")
             if st.form_submit_button("Unirme al grupo", type="primary"):
                 try:
                     db.unirse_grupo(cod)
                     st.success("Listo, ya pertenece al grupo.")
                 except Exception as e:
                     st.error("Código no válido." if "no válido" in str(e) else str(e))
+        st.markdown("**¿Su grupo aún no existe?** Créelo (lo hace un solo integrante); los demás se unen con el código.")
+        with st.form("crear_grupo", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            nombre = c1.text_input("Nombre del grupo (ej.: Grupo 1)")
+            ficha = c2.text_input("Ficha")
+            empresa = c1.text_input("Empresa proyecto")
+            sector = c2.text_input("Sector / actividad")
+            if st.form_submit_button("Crear grupo"):
+                try:
+                    r = db.crear_mi_grupo(nombre.strip(), ficha.strip(), empresa.strip(), sector.strip())
+                    if r.get("existente"):
+                        st.info(f"Ya existía un grupo de la ficha {ficha} con esa empresa («{r['nombre']}»): lo unimos a ese. Código: **{r['codigo']}**")
+                    else:
+                        st.success(f"Grupo creado. Compartan este código con sus compañeros: **{r['codigo']}**")
+                except Exception as e:
+                    st.error("Escriba nombre del grupo, ficha y empresa." if "obligatorios" in str(e) else str(e))
 
 
 # ======================================================================= principal
+# ======================================================================= ayuda
+INSTRUCTIVOS = Path(__file__).resolve().parent / "instructivos"
+NOMBRE_INSTR = {"aprendices": "Instructivo para aprendices", "instructores": "Instructivo para instructores"}
+
+
+def botones_instructivo(roles, pre):
+    cols = st.columns(len(roles) * 2)
+    i = 0
+    for rol in roles:
+        for ext, mime in (("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"), ("pdf", "application/pdf")):
+            f = INSTRUCTIVOS / f"instructivo_{rol}.{ext}"
+            if f.exists():
+                cols[i].download_button(f"⬇ {NOMBRE_INSTR[rol]} ({'Word' if ext == 'docx' else 'PDF'})", f.read_bytes(),
+                                        file_name=f.name, mime=mime, key=f"{pre}_{rol}_{ext}")
+            i += 1
+
+
+def pagina_ayuda(staff):
+    st.title("❓ Ayuda")
+    roles = ["instructores", "aprendices"] if staff else ["aprendices"]
+    botones_instructivo(roles, "ay")
+    tabs = st.tabs([NOMBRE_INSTR[r] for r in roles])
+    for t, rol in zip(tabs, roles):
+        f = INSTRUCTIVOS / f"instructivo_{rol}.md"
+        with t:
+            texto = f.read_text(encoding="utf-8") if f.exists() else "El instructivo no está en la carpeta «instructivos»."
+            st.markdown(texto.split("\n", 1)[1] if texto.startswith("# ") else texto)
+
+
 def main():
     if not configurada():
         return
@@ -947,22 +1109,24 @@ def main():
             st.rerun()
         return
     staff = perfil["rol"] in ("instructor", "lider")
-    paginas = (["Tablero", "Bitácora del grupo", "Presentación", "Administración", "Mi cuenta"] if staff
-               else ["Bitácora del grupo", "Presentación", "Mi cuenta"])
+    paginas = (["Tablero", "Bitácora del grupo", "Presentación", "Administración", "Mi cuenta", "Ayuda"] if staff
+               else ["Bitácora del grupo", "Presentación", "Mi cuenta", "Ayuda"])
     with st.sidebar:
-        st.markdown(f"### 📒 Bitácora GPI\n{perfil['nombre'] or perfil['correo']}  \n*{perfil['rol']}*")
+        st.markdown(f"### Bitácora GPI\n{perfil['nombre'] or perfil['correo']}  \n*{perfil['rol']}*")
         if st.session_state.get("pagina") not in paginas:
             st.session_state.pagina = paginas[0]
         pagina = st.radio("Menú", paginas, key="pagina", label_visibility="collapsed")
         grupos = db.grupos_visibles() if staff else db.mis_grupos(perfil["id"])
         if staff:
             grupos = [g for g in grupos if g["activo"]]
+            if pagina in ("Tablero", "Bitácora del grupo", "Presentación"):
+                grupos = filtrar_grupos(grupos, perfil)
         grupo = None
         if grupos and pagina in ("Bitácora del grupo", "Presentación"):
             ids = [g["id"] for g in grupos]
             if st.session_state.get("gid") not in ids:
                 st.session_state.gid = ids[0]
-            gid = st.selectbox("Grupo", ids, key="gid", format_func=lambda i: next(f"{g['nombre']} · {g['empresa']}" for g in grupos if g["id"] == i))
+            gid = st.selectbox("Grupo (escriba para buscar)", ids, key="gid", format_func=lambda i: next(f"{g['nombre']} · {g['empresa']}" for g in grupos if g["id"] == i))
             grupo = next(g for g in grupos if g["id"] == gid)
         if ia.proveedor() == "gemini":
             st.caption("🤖 IA: Gemini (plan gratuito, con cupo diario limitado).")
@@ -974,11 +1138,13 @@ def main():
             st.rerun()
 
     if pagina == "Tablero":
-        pagina_tablero(perfil)
+        pagina_tablero(perfil, grupos)
     elif pagina == "Administración":
         pagina_admin(perfil)
     elif pagina == "Mi cuenta":
         pagina_cuenta(perfil)
+    elif pagina == "Ayuda":
+        pagina_ayuda(staff)
     elif not grupo:
         st.title("📒 Bitácora")
         st.info("Aún no pertenece a ningún grupo. Vaya a «Mi cuenta» y escriba el código que le dio su instructor." if not staff
