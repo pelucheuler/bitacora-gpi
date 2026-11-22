@@ -72,7 +72,8 @@
     "Clientes, proveedores y competencia",
     "Portafolio de productos y diagrama técnico"
    ],
-   "temas": []
+   "temas": [],
+   "alcance": "Lo que la empresa es y vende: sector, productos, clientes. Es contexto; no cuenta como evidencia de ningún objetivo."
   },
   {
    "n": 1,
@@ -108,7 +109,8 @@
     "Estudio de tiempos y tiempo estándar",
     "Distribución de planta",
     "Gestión documental"
-   ]
+   ],
+   "alcance": "Cuenta: cómo produce hoy la empresa (tipo de sistema, flujo del proceso, métodos, tiempos medidos, distribución de su planta). No cuenta: la descripción de los productos que vende ni datos generales de la empresa (número de empleados, misión)."
   },
   {
    "n": 2,
@@ -143,7 +145,8 @@
     "Capacidad de proceso",
     "KPI y BSC",
     "Mejoramiento continuo"
-   ]
+   ],
+   "alcance": "Cuenta: variables medibles del proceso de la empresa (defectos, dimensiones, pesos, temperaturas, tiempos de entrega) con sus datos y herramientas estadísticas o de mejora aplicadas a esos datos. Un Ishikawa o Pareto sin datos de la empresa cuenta como parcial."
   },
   {
    "n": 3,
@@ -176,7 +179,8 @@
     "Geometría y conversiones",
     "Estadística descriptiva",
     "Hoja de cálculo"
-   ]
+   ],
+   "alcance": "Cuenta: un problema de la empresa planteado con variables, ecuaciones o funciones y resuelto (a mano o en hoja de cálculo) con conclusión. Una tabla de Excel sin planteamiento del modelo cuenta como parcial."
   },
   {
    "n": 4,
@@ -211,7 +215,8 @@
     "Inventarios y Kardex",
     "Transporte y programación lineal",
     "Logística inversa"
-   ]
+   ],
+   "alcance": "Cuenta: el flujo de materiales e información de la empresa desde sus proveedores hasta sus clientes: compras, proveedores, almacén, inventario, transporte, logística inversa."
   },
   {
    "n": 5,
@@ -244,7 +249,8 @@
     "Costos y sistemas de costos",
     "Inventarios y EOQ",
     "Plan agregado y PMP"
-   ]
+   ],
+   "alcance": "Cuenta: demanda, capacidad, costos e inventarios de los productos de la empresa usados para planear su producción (pronóstico, plan agregado, plan maestro, costo por unidad u orden)."
   },
   {
    "n": 6,
@@ -277,7 +283,8 @@
     "Nómina",
     "Capacitación y desempeño",
     "Liderazgo y conflictos"
-   ]
+   ],
+   "alcance": "Cuenta: la gestión del personal de la empresa (organigrama, perfiles, turnos, polivalencia, nómina, capacitación, desempeño, bienestar). Mencionar cuántos empleados hay es contexto, no gestión."
   },
   {
    "n": 7,
@@ -312,7 +319,8 @@
     "Secuenciación",
     "Balanceo de líneas",
     "Manufactura de clase mundial"
-   ]
+   ],
+   "alcance": "Cuenta: cómo se programan las órdenes o lotes de producción de la empresa en sus recursos (rutas, cargas, Gantt, secuenciación, balanceo, OEE, lead time)."
   },
   {
    "n": 8,
@@ -343,7 +351,8 @@
     "Lenguajes IEC 61131-3",
     "SCADA, HMI, IoT",
     "Comunicación industrial"
-   ]
+   ],
+   "alcance": "Cuenta: instrumentos, sensores, actuadores, controladores (PLC) y automatización del PROCESO con el que la empresa produce (sus máquinas y líneas de fabricación). No cuenta: los equipos o máquinas que la empresa fabrica o vende (son su producto, no su proceso), las fotos de maquinaria sin identificar variables ni instrumentos, ni el mantenimiento de máquinas."
   }
  ]
 }

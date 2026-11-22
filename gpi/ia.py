@@ -361,7 +361,17 @@ CALIBRACIÓN = """CÓMO ASIGNAR LOS NIVELES (los evaluados son aprendices de niv
 - Evalúa lo que la presentación muestra. Lo que normalmente se entrega como anexo (estudios completos, código del PLC, planos P&ID, hojas de cálculo, fichas técnicas) no se castiga si la diapositiva lo resume, lo muestra en parte o lo menciona; en ese caso cuenta como presente y solo recomienda verificarlo en el anexo.
 - La cantidad de diapositivas y el tiempo de exposición NO afectan ningún nivel (tampoco «Comunicación y formato»): van solo en "extension" como recomendación.
 - La bitácora (vistos buenos de instructores) es informativa: que falte un visto bueno NO baja ningún nivel ni se menciona en alertas.
-- Detalles menores de formato (mezcla de idiomas, tipografía) bajan como máximo un nivel en «Comunicación y formato»."""
+- Detalles menores de formato (mezcla de idiomas, tipografía) bajan como máximo un nivel en «Comunicación y formato».
+
+CÓMO DISTINGUIR UN OBJETIVO DE OTRO (para no calificar «a la media»):
+- Evalúa cada objetivo de forma independiente y con sus propias evidencias. No repitas los mismos niveles por costumbre: es normal que un objetivo bien desarrollado quede en 4 y otro apenas mencionado quede en 2.
+- Para cada evidencia mínima del objetivo marca su estado: "C" completa (aparece con datos o resultados de la empresa, aunque sea resumida y el detalle esté en un anexo), "P" parcial (se menciona o se muestra a medias, sin datos o sin resultado), "A" ausente, "N" no aplica a esta empresa. Sé exacto: los niveles se calculan a partir de estas marcas.
+- PRODUCTO vs. PROCESO: lo que la empresa fabrica o vende (su portafolio) es contexto general y NO es evidencia de ningún objetivo. Si la empresa fabrica máquinas o equipos (marmitas, molinos, tableros, etc.), esos equipos son su producto: no cuentan para «Equipos de control». Para ese objetivo solo cuentan los instrumentos, sensores, controladores y la automatización de las máquinas y procesos con los que la empresa produce.
+- Una misma diapositiva puede servir a varios objetivos solo si de verdad muestra la evidencia de cada uno; citar una diapositiva no basta.
+
+ALCANCE DE LAS RECOMENDACIONES Y OPORTUNIDADES DE MEJORA:
+- Todas deben poder trabajarse con las técnicas de alguno de los 8 objetivos (las evidencias mínimas listadas) y deben decir a qué objetivo pertenecen.
+- No propongas mejoras que no correspondan a ninguna competencia del programa, por ejemplo planes de mantenimiento preventivo o TPM, mercadeo, ventas, publicidad, finanzas o software contable."""
 
 
 def rango_diapositivas(stats, final):
@@ -386,8 +396,142 @@ def _extension(stats, final=False):
                 "La extensión es solo una recomendación: no afecta la nota. REGLA PARA TODAS LAS RECOMENDACIONES: no pidas agregar diapositivas. Si falta contenido, di qué reemplazar, fusionar o condensar para que quepa, o qué llevar a un anexo (Excel o documento) que se entrega pero no se expone.")
 
 
-EXT_SCHEMA = """"problematicas_sugeridas":[{"obj":N,"situacion":"posible situación problémica concreta para un objetivo que la presentación no cubre o cubre en nivel 1 o 2, basada en lo que la presentación muestra de la empresa (no inventes datos)","sustento":"diapositiva o dato que la sugiere","encaje":"en cuál situación problémica existente o diapositiva se puede integrar sin alargar la presentación","indicador":"indicador para medirla","datos_que_faltan":["dato que deben pedir a la empresa"]}],
+EXT_SCHEMA = """"problematicas_sugeridas":[{"obj":N,"situacion":"posible situación problémica concreta para un objetivo que la presentación no cubre o cubre en nivel 1 o 2, basada en lo que la presentación muestra de la empresa y en su proceso productivo, no en los productos que vende (no inventes datos)","sustento":"diapositiva o dato que la sugiere","encaje":"en cuál situación problémica existente o diapositiva se puede integrar sin alargar la presentación","indicador":"indicador para medirla","datos_que_faltan":["dato que deben pedir a la empresa"]}],
  "extension":{"adecuada":true,"diapositivas_recomendadas":20,"comentario":"1 o 2 frases, en tono constructivo, sobre cómo ajustarla al tiempo","condensar":[{"diapositivas":"4-7","sugerencia":"qué fusionar o resumir"}],"anexos":["contenido que conviene mover a anexos"]}"""
+
+
+LISTA_SCHEMA = (
+    '"evidencias":[{"n":1,"estado":"C|P|A|N","diap":"8"}] (una por cada evidencia mínima del objetivo, en su orden), '
+    '"problema":{"definido":true,"de_la_empresa":true,"cuantificado":true,"datos_6_meses":false}, '
+    '"calculos":{"hay":true,"errores":"ninguno|menores|graves","verificables":true}, '
+    '"tecnica":"correcta|errores_menores|errores_graves", '
+    '"propuesta":{"hay":true,"indicador":true,"antes_despues":false,"meta":false,"costo_beneficio":false}')
+
+GUIA_LISTA = """SIGNIFICADO DE LA LISTA DE VERIFICACIÓN (responde con lo que de verdad se ve; no supongas):
+- problema.definido: hay una situación problémica para este objetivo. de_la_empresa: es de esta empresa y no genérica. cuantificado: tiene cifras de la empresa. datos_6_meses: usa datos históricos de 6 meses o más.
+- calculos.hay: hay cálculos o datos procesados de este objetivo. errores: si los cálculos que se pueden verificar cuadran. verificables: muestran unidades, fórmulas o fuentes.
+- tecnica: si las técnicas de la competencia que aparecen están bien aplicadas.
+- propuesta.hay: hay propuesta de solución. indicador: tiene indicador con fórmula o nombre claro. antes_despues: muestra el valor actual y el esperado. meta: fija una meta. costo_beneficio: estima costo, ahorro o beneficio."""
+
+
+def _si(v):
+    return v is True or str(v).strip().lower() in ("true", "si", "sí", "1", "yes")
+
+
+def _niveles_lista(x, o, c5):
+    """Niveles c1..c4 calculados a partir de la lista de verificación del objetivo; c5 lo da la IA.
+    Devuelve (niveles, hay_evidencia) o (None, None) si la IA no entregó la lista."""
+    ev = x.get("evidencias")
+    if not isinstance(ev, list) or not ev:
+        return None, None
+    estados = {}
+    for e in ev:
+        if not isinstance(e, dict):
+            continue
+        try:
+            estados[int(e.get("n"))] = str(e.get("estado") or "A").strip().upper()[:1]
+        except (TypeError, ValueError):
+            pass
+    aplican = [estados.get(i, "A") for i in range(1, len(o["evid"]) + 1) if estados.get(i, "A") != "N"]
+    puntos = sum(1 if s == "C" else 0.5 if s == "P" else 0 for s in aplican)
+    cobertura = puntos / len(aplican) if aplican else 0
+    pr = x.get("problema") or {}
+    ca = x.get("calculos") or {}
+    pp = x.get("propuesta") or {}
+    hay_evidencia = puntos > 0 or _si(pr.get("definido"))
+
+    # c1 Contexto y problema
+    if not _si(pr.get("definido")):
+        c1 = 1
+    elif not (_si(pr.get("de_la_empresa")) and _si(pr.get("cuantificado"))):
+        c1 = 2
+    else:
+        c1 = 4 if _si(pr.get("datos_6_meses")) else 3
+    # c2 Aplicación técnica: cuánto de las evidencias mínimas aparece, limitado por la calidad
+    c2 = 4 if cobertura >= 0.55 else 3 if cobertura >= 0.25 else 2 if cobertura > 0 else 1
+    tec = str(x.get("tecnica") or "").lower()
+    if "grave" in tec:
+        c2 = min(c2, 2)
+    elif "menor" in tec:
+        c2 = min(c2, 3)
+    # c3 Datos y cálculos
+    err = str(ca.get("errores") or "").lower()
+    if not _si(ca.get("hay")):
+        c3 = 1
+    elif "grave" in err:
+        c3 = 2
+    elif "menor" in err or not _si(ca.get("verificables")):
+        c3 = 3
+    else:
+        c3 = 4
+    # c4 Propuesta de solución e indicadores
+    if not _si(pp.get("hay")):
+        c4 = 1
+    elif not _si(pp.get("indicador")):
+        c4 = 2
+    elif _si(pp.get("antes_despues")) and _si(pp.get("meta")) and _si(pp.get("costo_beneficio")):
+        c4 = 4
+    else:
+        c4 = 3
+    if not hay_evidencia:  # el objetivo no aparece: nivel 1 en todo
+        return [1] * len(RUBRICA), False
+    return [c1, c2, c3, c4, _nivel(c5 or 3)], True
+
+
+def _faltantes_lista(x, o):
+    out = []
+    for e in x.get("evidencias") or []:
+        try:
+            i = int(e.get("n"))
+        except (TypeError, ValueError, AttributeError):
+            continue
+        if 1 <= i <= len(o["evid"]) and str(e.get("estado") or "").strip().upper()[:1] == "A":
+            out.append(o["evid"][i - 1])
+    return out
+
+
+def _encontradas_lista(x, o):
+    out = []
+    for e in x.get("evidencias") or []:
+        try:
+            i = int(e.get("n"))
+        except (TypeError, ValueError, AttributeError):
+            continue
+        s = str(e.get("estado") or "").strip().upper()[:1]
+        if 1 <= i <= len(o["evid"]) and s in ("C", "P"):
+            out.append({"evidencia": o["evid"][i - 1], "diapositivas": str(e.get("diap") or ""),
+                        "calidad": "correcta" if s == "C" else "incompleta"})
+    return out
+
+
+def _oportunidades(lista):
+    """Deja solo las oportunidades asociadas a uno de los 8 objetivos y las convierte en texto."""
+    out = []
+    for x in lista or []:
+        if isinstance(x, str):
+            out.append(x)
+            continue
+        if not isinstance(x, dict):
+            continue
+        try:
+            n = int(x.get("obj"))
+        except (TypeError, ValueError):
+            continue
+        texto = str(x.get("oportunidad") or x.get("texto") or "").strip()
+        if 1 <= n <= 8 and texto:
+            out.append(f"Objetivo {n} ({OBJ[n]['corto']}): {texto}")
+    return out
+
+
+def _filtrar_problematicas(r):
+    ok = []
+    for s in r.get("problematicas_sugeridas") or []:
+        try:
+            if 1 <= int(s.get("obj")) <= 8:
+                ok.append(s)
+        except (TypeError, ValueError, AttributeError):
+            pass
+    r["problematicas_sugeridas"] = ok
 
 
 def _bitacora_texto(bitacora):
@@ -410,7 +554,7 @@ def _bitacora_texto(bitacora):
 
 def evaluar_avance(grupo, obj, px, transcripciones, fallidos, stats, imagenes=None):
     p = prompt_avance(grupo, obj, px, transcripciones, fallidos, stats, adjuntas=bool(imagenes))
-    return procesar_avance(llamar_json(p, imagenes=imagenes, esfuerzo="high", pesado=True))
+    return procesar_avance(llamar_json(p, imagenes=imagenes, esfuerzo="high", pesado=True), obj)
 
 
 def prompt_avance(grupo, obj, px, transcripciones, fallidos, stats, manual=False, adjuntas=False):
@@ -423,12 +567,16 @@ def prompt_avance(grupo, obj, px, transcripciones, fallidos, stats, manual=False
 EMPRESA: {grupo.get('empresa', '')}.
 OBJETIVO QUE SE REVISA: {obj}. {o['objetivo']}.
 COMPETENCIA: {o['competencia']} ({o['codigo']}).
-EVIDENCIAS MÍNIMAS ESPERADAS PARA ESTE OBJETIVO: {evid}.
+EVIDENCIAS MÍNIMAS ESPERADAS PARA ESTE OBJETIVO (numeradas): {evid}.
+QUÉ CUENTA PARA ESTE OBJETIVO: {o.get('alcance', '')}
+CONTEXTO, NO EVIDENCIA: {OBJ[0].get('alcance', '')}
 
 RÚBRICA (nivel 4 a 1):
 {rubrica_texto()}
 
 {CALIBRACIÓN}
+
+{GUIA_LISTA}
 
 {_nota_imagenes(transcripciones, fallidos, manual, adjuntas)}
 
@@ -437,19 +585,18 @@ RÚBRICA (nivel 4 a 1):
 CONTENIDO DE LA PRESENTACIÓN ({len(px['slides'])} diapositivas):
 {texto_diapositivas(px, transcripciones, 140000)}
 
-Responde SOLO JSON:
-{{"criterios":[{{"id":"c1","nivel":3,"justificacion":"1 a 2 frases citando diapositivas"}}, …los 5…],
- "evidencias_encontradas":[{{"evidencia":"nombre de la evidencia mínima","diapositivas":"8, 9","calidad":"correcta|incompleta|con errores"}}],
- "evidencias_faltantes":["…"],
- "recomendaciones":["3 a 5 recomendaciones concretas y accionables para el grupo"],
- "oportunidades_mejora":["2 a 4 oportunidades de mejora del proyecto o de la propuesta de solución"],
+Responde SOLO JSON. Primero llena la lista de verificación y después escribe las justificaciones de acuerdo con ella:
+{{"obj":{obj},"lista":{{{LISTA_SCHEMA}}},
+ "criterios":[{{"id":"c1","nivel":3,"justificacion":"1 a 2 frases citando diapositivas"}}, …los 5…],
+ "recomendaciones":["3 a 5 recomendaciones concretas y accionables para el grupo, con técnicas de esta competencia"],
+ "oportunidades_mejora":[{{"obj":{obj},"oportunidad":"mejora para la empresa que se trabaja con las técnicas de este objetivo"}}],
  "alertas":["solo problemas de fondo: datos dudosos, cálculos que no cuadran, contenido que no corresponde al objetivo. No repitas aquí la extensión"],
  {EXT_SCHEMA}}}
 "problematicas_sugeridas" solo si este objetivo no aparece o su Aplicación técnica queda en nivel 1 o 2 (1 o 2 sugerencias); si no, deja la lista vacía."""
     return prompt
 
 
-def procesar_avance(r):
+def procesar_avance(r, obj=None):
     niveles = []
     just = []
     crit = {str(c.get("id")): c for c in (r.get("criterios") or [])}
@@ -457,10 +604,25 @@ def procesar_avance(r):
         x = crit.get(c["id"], {})
         niveles.append(_nivel(x.get("nivel")))
         just.append(x.get("justificacion", ""))
-    if r.get("evidencias_encontradas"):
+    lista = r.get("lista") if isinstance(r.get("lista"), dict) else None
+    try:
+        obj = int(obj if obj is not None else r.get("obj"))
+    except (TypeError, ValueError):
+        obj = None
+    o = OBJ[obj] if obj in range(1, 9) else None
+    hay = bool(r.get("evidencias_encontradas"))
+    if lista and o:
+        calc, hay_l = _niveles_lista(lista, o, niveles[4])
+        if calc:
+            niveles, hay = calc, hay_l
+            r["evidencias_encontradas"] = _encontradas_lista(lista, o)
+            r["evidencias_faltantes"] = _faltantes_lista(lista, o)
+    if hay:
         niveles = [max(2, n) for n in niveles]  # hay evidencia parcial: nunca nivel 1
     r["niveles"] = niveles
     r["justificaciones"] = just
+    r["oportunidades_mejora"] = _oportunidades(r.get("oportunidades_mejora"))
+    _filtrar_problematicas(r)
     return r
 
 
@@ -472,17 +634,23 @@ def evaluar_final(grupo, px, transcripciones, fallidos, stats, bitacora, imagene
 def prompt_final(grupo, px, transcripciones, fallidos, stats, bitacora, manual=False, adjuntas=False):
     from .pptx_lector import texto_diapositivas
 
-    objs = "\n".join(f"Objetivo {o['n']} ({o['competencia']}): {o['objetivo']}. Evidencias: {'; '.join(o['evid'])}." for o in OBJ8)
+    objs = "\n".join(
+        f"Objetivo {o['n']} ({o['competencia']}): {o['objetivo']}.\n  Evidencias mínimas: "
+        + "; ".join(f"({i}) {e}" for i, e in enumerate(o["evid"], start=1))
+        + f".\n  Qué cuenta: {o.get('alcance', '')}" for o in OBJ8)
     prompt = f"""Eres un instructor evaluador del programa Tecnología en Gestión de la Producción Industrial (SENA, Colombia). Evalúa la PRESENTACIÓN FINAL del proyecto productivo de un grupo. La presentación debe desarrollar los 8 objetivos específicos a través de las propuestas de solución a las situaciones problémicas. Evalúa cada objetivo por separado con la misma rúbrica, basando cada juicio en lo que aparece en las diapositivas y citando su número. Si un objetivo no aparece en ninguna diapositiva, califícalo con nivel 1 en todos los criterios y dilo; si aparece aunque sea parcialmente, aplica la calibración de abajo.
 
 EMPRESA: {grupo.get('empresa', '')}.
-OBJETIVOS Y EVIDENCIAS MÍNIMAS:
+OBJETIVOS Y EVIDENCIAS MÍNIMAS (numeradas):
 {objs}
+Contexto general, no evidencia de ningún objetivo: {OBJ[0].get('alcance', '')}
 
 RÚBRICA (nivel 4 a 1):
 {rubrica_texto()}
 
 {CALIBRACIÓN}
+
+{GUIA_LISTA}
 
 BITÁCORA DEL GRUPO (vistos buenos y observaciones de los instructores técnicos de cada competencia). Es solo contexto: si hay observaciones de ajustes y la presentación no las atendió, menciónalo en las recomendaciones de ese objetivo. Que falten vistos buenos no afecta los niveles ni va en alertas:
 {_bitacora_texto(bitacora)}
@@ -494,10 +662,10 @@ BITÁCORA DEL GRUPO (vistos buenos y observaciones de los instructores técnicos
 CONTENIDO ({len(px['slides'])} diapositivas):
 {texto_diapositivas(px, transcripciones, 160000)}
 
-Responde SOLO JSON. Justificaciones de máximo 25 palabras.
-{{"objetivos":[{{"obj":1,"diapositivas":"10-14","niveles":{{"c1":3,"c2":2,"c3":3,"c4":2,"c5":3}},"justificacion":"por qué esos niveles, citando diapositivas","faltantes":["evidencias mínimas que no aparecen"],"recomendaciones":["1 o 2 acciones concretas"]}}, …los 8…],
+Responde SOLO JSON. Para cada objetivo llena primero la lista de verificación y después escribe la justificación de acuerdo con ella (máximo 25 palabras). En "diapositivas" pon solo las que de verdad tienen evidencia de ese objetivo (vacío si ninguna).
+{{"objetivos":[{{"obj":1,"diapositivas":"10-14",{LISTA_SCHEMA},"niveles":{{"c1":3,"c2":2,"c3":3,"c4":2,"c5":3}},"justificacion":"por qué esos niveles, citando diapositivas","recomendaciones":["1 o 2 acciones concretas con técnicas de esta competencia"]}}, …los 8…],
  "recomendaciones_generales":["3 a 5 recomendaciones para todo el proyecto"],
- "oportunidades_mejora":["3 a 5 oportunidades de mejora del proyecto y de sus propuestas de solución, para la empresa"],
+ "oportunidades_mejora":[{{"obj":2,"oportunidad":"mejora para la empresa que se trabaja con las técnicas de ese objetivo"}}, …3 a 5…],
  "alertas":["solo problemas de fondo: datos dudosos, cálculos que no cuadran, objetivos totalmente ausentes, contenido copiado o que no es de la empresa. No repitas aquí la extensión ni la bitácora"],
  {EXT_SCHEMA}}}
 En "problematicas_sugeridas" incluye 1 o 2 por cada objetivo ausente o con Aplicación técnica en nivel 1 o 2."""
@@ -514,16 +682,24 @@ def procesar_final(r):
     objetivos = []
     for o in OBJ8:
         x = por_obj.get(o["n"], {})
-        nv = x.get("niveles") or {}
+        nv = x.get("niveles") if isinstance(x.get("niveles"), dict) else {}
         niveles = [_nivel(nv.get(c["id"])) for c in RUBRICA]
-        if _hay_diapositivas(x.get("diapositivas")):
+        hay = _hay_diapositivas(x.get("diapositivas"))
+        faltantes = x.get("faltantes") or []
+        calc, hay_l = _niveles_lista(x, o, niveles[4])
+        if calc:  # niveles calculados desde la lista de verificación (más consistentes)
+            niveles, hay = calc, hay_l
+            faltantes = _faltantes_lista(x, o)
+        if hay:
             niveles = [max(2, n) for n in niveles]  # hay evidencia parcial: nunca nivel 1
         objetivos.append({
             "obj": o["n"], "diapositivas": str(x.get("diapositivas") or ""), "niveles": niveles,
             "justificacion": x.get("justificacion") or "No se encontró en la presentación.",
-            "faltantes": x.get("faltantes") or [], "recomendaciones": x.get("recomendaciones") or [],
+            "faltantes": faltantes, "recomendaciones": x.get("recomendaciones") or [],
         })
     r["objetivos"] = objetivos
+    r["oportunidades_mejora"] = _oportunidades(r.get("oportunidades_mejora"))
+    _filtrar_problematicas(r)
     return r
 
 
