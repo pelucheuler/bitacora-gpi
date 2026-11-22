@@ -536,7 +536,10 @@ def evaluar(grupo, perfil, arch, tipo, obj, minutos, leer):
             px = leer_pptx(data)
             trans, fallidos, adj = {}, 0, None
             if leer and ia.proveedor() == "gemini":
-                adj = ia.imagenes_para_gemini(px, imagenes_relevantes(px)) or None
+                adj, total = ia.imagenes_para_gemini(px, imagenes_relevantes(px))
+                adj = adj or None
+                if total > len(adj or []):
+                    st.write(f"La presentación tiene {total} imágenes con contenido; se envían las {len(adj or [])} más importantes, reducidas.")
                 st.write(f"Enviando el texto y {len(adj or [])} imágenes en una sola solicitud…")
             elif leer:
                 items = imagenes_relevantes(px)
@@ -544,21 +547,44 @@ def evaluar(grupo, perfil, arch, tipo, obj, minutos, leer):
                     barra = st.progress(0.0, text=f"Leyendo {len(items)} imágenes…")
                     trans, fallidos = ia.transcribir_imagenes(px, items, lambda k, n: barra.progress(k / n, text=f"Leyendo imágenes: lote {k} de {n}"))
             stats = estadisticas(px, trans, int(minutos))
-            st.write("Aplicando la rúbrica…")
+            st.write("Aplicando la rúbrica… (suele tardar de 1 a 3 minutos; si pasa de 5 la app se detiene sola y avisa)")
+
+            def aplicar(imagenes):
+                if tipo == "final":
+                    return ia.evaluar_final(grupo, px, trans, fallidos, stats, bitacora_para_ia(grupo["id"]), imagenes=imagenes)
+                return ia.evaluar_avance(grupo, obj, px, trans, fallidos, stats, imagenes=imagenes)
+
+            solo_texto = False
+            try:
+                r = aplicar(adj)
+            except ia.IATiempo:
+                if not adj:
+                    raise
+                st.write("Gemini tardó demasiado con las imágenes. Reintentando solo con el texto…")
+                adj, solo_texto = None, True
+                r = aplicar(None)
+            if solo_texto:
+                r.setdefault("alertas", [])
+                if isinstance(r["alertas"], list):
+                    r["alertas"].insert(0, "Evaluación hecha SOLO con el texto: Gemini no alcanzó a leer las imágenes. "
+                                           "Revise usted las tablas y gráficas pegadas como imagen antes de validar.")
             if tipo == "final":
-                r = ia.evaluar_final(grupo, px, trans, fallidos, stats, bitacora_para_ia(grupo["id"]), imagenes=adj)
                 n_prop, ap = nota_final(r["objetivos"]), aprueba_final(r["objetivos"])
             else:
-                r = ia.evaluar_avance(grupo, obj, px, trans, fallidos, stats, imagenes=adj)
                 n_prop, ap = nota(r["niveles"]), aprueba(r["niveles"])
             r.update({"nota_propuesta": n_prop, "aprueba_propuesta": ap, "stats": stats,
                       "imagenes_leidas": len(adj) if adj else len(trans), "lotes_fallidos": fallidos,
                       "via": ia.proveedor()})
             guardar_revision(grupo, perfil, arch.name, data, tipo, obj, px, r, trans)
             stt.update(label="Evaluación lista", state="complete")
+        except ia.IATiempo as e:
+            stt.update(label="Tiempo agotado", state="error")
+            st.error(f"⏱️ {e} No es falta de cupo: Gemini está lento en este momento. Intente de nuevo en unos minutos.")
+            return
         except ia.IAError as e:
             stt.update(label="No se pudo evaluar", state="error")
-            st.error(str(e))
+            txt = str(e)
+            st.error(("🚫 " if "cupo" in txt.lower() or "límite" in txt.lower() else "⚠️ ") + txt)
             return
         except Exception as e:
             stt.update(label="No se pudo evaluar", state="error")
