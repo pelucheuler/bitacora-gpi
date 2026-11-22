@@ -71,6 +71,21 @@ def _modelos_gemini(pesado):
     return out
 
 
+class IATiempo(IAError):
+    """Gemini no respondió dentro del tiempo límite."""
+
+
+# Tiempo máximo de espera de UNA solicitud (segundos) y de todos los intentos juntos.
+TIEMPO_PESADO = 150
+TIEMPO_LIGERO = 90
+TIEMPO_TOTAL = 270
+
+
+def _es_timeout(e):
+    nombre = type(e).__name__.lower()
+    return "timeout" in nombre or "timed out" in str(e).lower() or "deadline" in str(e).lower()
+
+
 def _llamar_gemini(prompt, imagenes, max_tokens, json_mode, pesado):
     from google.genai import errors, types
 
@@ -81,11 +96,20 @@ def _llamar_gemini(prompt, imagenes, max_tokens, json_mode, pesado):
             im = im[1]
         partes.append(types.Part.from_bytes(data=im, mime_type="image/jpeg"))
     partes.append(prompt)
-    cfg = types.GenerateContentConfig(max_output_tokens=max(max_tokens, 16000),
-                                      response_mime_type="application/json" if json_mode else None)
+    espera = TIEMPO_PESADO if pesado else TIEMPO_LIGERO
+    inicio = time.monotonic()
     ultimo = ""
     for modelo in _modelos_gemini(pesado):
         for intento in range(2):
+            restante = TIEMPO_TOTAL - (time.monotonic() - inicio)
+            if restante < 20:
+                raise IAError("Gemini tardó demasiado en responder (más de 4 minutos entre todos los intentos). "
+                               + (ultimo + " " if ultimo else "")
+                               + "Intente de nuevo en unos minutos o desmarque «Leer también las imágenes» para evaluar solo el texto.")
+            cfg = types.GenerateContentConfig(
+                max_output_tokens=max(max_tokens, 16000),
+                response_mime_type="application/json" if json_mode else None,
+                http_options=types.HttpOptions(timeout=int(min(espera, restante) * 1000)))
             try:
                 r = _gemini().models.generate_content(model=modelo, contents=partes, config=cfg)
                 texto = (r.text or "").strip()
@@ -100,14 +124,17 @@ def _llamar_gemini(prompt, imagenes, max_tokens, json_mode, pesado):
                 if e.code == 429:
                     completo = str(e).lower()
                     por_dia = "perday" in completo.replace("_", "") or "per day" in completo or "daily" in completo
-                    if not por_dia and intento == 0:
+                    if not por_dia and intento == 0 and TIEMPO_TOTAL - (time.monotonic() - inicio) > 60:
                         time.sleep(35)  # límite por minuto: esperar y reintentar una vez
                         continue
-                    ultimo = ("Se agotó el cupo gratuito diario de Gemini." if por_dia
-                              else "Se alcanzó el límite por minuto de Gemini.")
+                    ultimo = ("Se agotó el cupo gratuito diario de Gemini (se renueva cada día)." if por_dia
+                              else "Se alcanzó el límite de solicitudes por minuto de Gemini.")
                     break  # probar el siguiente modelo (los ligeros tienen más cupo)
                 if e.code in (400, 401, 403) and ("api key" in str(e).lower() or "permission" in str(e).lower()):
                     raise IAError("La clave GEMINI_API_KEY no es válida. Revise los Secrets de la app.")
+                if e.code == 413 or "too large" in msg.lower() or "payload" in msg.lower():
+                    raise IAError("La solicitud es demasiado grande para Gemini. Desmarque «Leer también las imágenes» "
+                                  "o reduzca las imágenes de la presentación.")
                 raise IAError(f"Gemini no aceptó la solicitud: {msg[:300]}")
             except errors.ServerError:
                 if intento == 0:
@@ -115,7 +142,13 @@ def _llamar_gemini(prompt, imagenes, max_tokens, json_mode, pesado):
                     continue
                 ultimo = "Gemini está saturado en este momento."
                 break
-    raise IAError(ultimo + " Intente más tarde (el cupo diario se renueva cada día).")
+            except IAError:
+                raise
+            except Exception as e:
+                if _es_timeout(e):
+                    raise IATiempo(f"Gemini no respondió en {int(min(espera, restante))} segundos.")
+                raise IAError(f"No hubo conexión con Gemini ({type(e).__name__}). Revise internet e intente de nuevo.")
+    raise IAError((ultimo or "Gemini no respondió.") + " Intente más tarde.")
 
 
 def llamar(prompt: str, imagenes=None, esfuerzo: str = "medium", max_tokens: int = 16000,
@@ -511,14 +544,42 @@ def para_claude_ai(prompt: str) -> str:
     return prompt + "\n\nEntrega la respuesta completa como un único bloque de código JSON, sin texto adicional."
 
 
-def imagenes_para_gemini(px, items, maximo=60):
-    """Imágenes de las diapositivas con su etiqueta, para enviarlas en la misma solicitud."""
+MAX_IMAGENES_GEMINI = 16
+
+
+def imagenes_para_gemini(px, items, maximo=MAX_IMAGENES_GEMINI, lado=1024, calidad=70):
+    """Imágenes de las diapositivas con su etiqueta, para enviarlas en la misma solicitud.
+    Si hay más de `maximo`, se prioriza: primero una imagen por diapositiva; luego PNG (tablas,
+    gráficas, diagramas) sobre JPG (fotos); luego diapositivas con poco texto (la imagen ES el
+    contenido); luego las más pesadas. Se envían en el orden de las diapositivas.
+    Devuelve (imagenes, total_encontradas)."""
     from .pptx_lector import a_jpeg
 
-    out = []
-    for it in items[:maximo]:
+    z = px["zip"]
+    palabras = {sl["n"]: len((sl.get("text") or "").split()) for sl in px["slides"]}
+
+    def peso(it):
         try:
-            out.append((f"Imagen de la diapositiva {it['slide']}:", a_jpeg(px["zip"].read(it["path"]), 1280, 80)))
+            return z.getinfo(it["path"]).file_size
+        except KeyError:
+            return 0
+
+    elegidas = items
+    if len(items) > maximo:
+        es_png = lambda it: it["path"].lower().endswith((".png", ".emf", ".wmf", ".gif", ".bmp"))
+        orden_en_diap = {}
+        por_diap = {}
+        for i, it in sorted(enumerate(items), key=lambda x: (not es_png(x[1]), -peso(x[1]))):
+            k = por_diap.get(it["slide"], 0)
+            orden_en_diap[i] = k
+            por_diap[it["slide"]] = k + 1
+        clave = lambda i: (orden_en_diap[i], not es_png(items[i]), palabras.get(items[i]["slide"], 0) > 40, -peso(items[i]))
+        top = sorted(range(len(items)), key=clave)[:maximo]
+        elegidas = [items[i] for i in sorted(top)]
+    out = []
+    for it in elegidas:
+        try:
+            out.append((f"Imagen de la diapositiva {it['slide']}:", a_jpeg(z.read(it["path"]), lado, calidad)))
         except Exception:
             pass
-    return out
+    return out, len(items)
