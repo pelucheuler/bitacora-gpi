@@ -305,7 +305,7 @@ def transcribir_imagenes(px, items, progreso=None, lote=6):
         fotos, etiquetas = [], []
         for it in bt:
             try:
-                fotos.append(a_jpeg(px["zip"].read(it["path"]), 1568, 85))
+                fotos.append(a_jpeg(px["zip"].read(it["path"]), 1568, 85, crop=it.get("crop")))
                 etiquetas.append(it["slide"])
             except Exception:
                 pass
@@ -399,6 +399,9 @@ def _extension(stats, final=False):
 EXT_SCHEMA = """"problematicas_sugeridas":[{"obj":N,"situacion":"posible situación problémica concreta para un objetivo que la presentación no cubre o cubre en nivel 1 o 2, basada en lo que la presentación muestra de la empresa y en su proceso productivo, no en los productos que vende (no inventes datos)","sustento":"diapositiva o dato que la sugiere","encaje":"en cuál situación problémica existente o diapositiva se puede integrar sin alargar la presentación","indicador":"indicador para medirla","datos_que_faltan":["dato que deben pedir a la empresa"]}],
  "extension":{"adecuada":true,"diapositivas_recomendadas":20,"comentario":"1 o 2 frases, en tono constructivo, sobre cómo ajustarla al tiempo","condensar":[{"diapositivas":"4-7","sugerencia":"qué fusionar o resumir"}],"anexos":["contenido que conviene mover a anexos"]}"""
 
+
+ALERTA_SCHEMA = ('{"diapositiva":27,"origen":"texto|imagen|ausencia","cita":"frase copiada TAL CUAL de la diapositiva o de la imagen que sustenta la alerta (vacía solo si origen es ausencia)",'
+                 '"alerta":"solo problemas de fondo: datos dudosos, cifras que faltan o no cuadran, contenido que no es de la empresa o no corresponde al objetivo, objetivos ausentes (origen ausencia). No repitas aquí la extensión ni la bitácora"}')
 
 LISTA_SCHEMA = (
     '"evidencias":[{"n":1,"estado":"C|P|A|N","diap":"8"}] (una por cada evidencia mínima del objetivo, en su orden), '
@@ -534,6 +537,70 @@ def _filtrar_problematicas(r):
     r["problematicas_sugeridas"] = ok
 
 
+def _norm(t):
+    import unicodedata
+    t = unicodedata.normalize("NFKD", str(t or "").lower())
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    return re.findall(r"[a-z0-9]+", t)
+
+
+def _contiene(texto, cita):
+    """True si la cita aparece en el texto (palabra por palabra, o al menos el 80 % de sus palabras)."""
+    pc, pt = _norm(cita), _norm(texto)
+    if not pc or not pt:
+        return False
+    if " ".join(pc) in " ".join(pt):
+        return True
+    clave = [w for w in pc if len(w) > 3]
+    return len(clave) >= 3 and sum(w in set(pt) for w in clave) / len(clave) >= 0.8
+
+
+def verificar_alertas(r, px=None, trans=None):
+    """Comprueba cada alerta contra la presentación y la deja como texto con su diapositiva y origen.
+    Alertas que dicen citar el texto pero cuya frase no aparece en ninguna diapositiva se descartan
+    (quedan en "alertas_descartadas" para revisión)."""
+    trans = trans or {}
+    slides = {s["n"]: (s.get("text") or "") + "\n" + (s.get("notes") or "") for s in (px or {}).get("slides", [])}
+    ok, fuera = [], []
+    for a in r.get("alertas") or []:
+        if isinstance(a, str):
+            ok.append(a)
+            continue
+        if not isinstance(a, dict) or not str(a.get("alerta") or "").strip():
+            continue
+        alerta = str(a["alerta"]).strip()
+        cita = str(a.get("cita") or "").strip()
+        origen = str(a.get("origen") or "").lower()
+        try:
+            n = int(a.get("diapositiva") or 0)
+        except (TypeError, ValueError):
+            n = 0
+        if "ausen" in origen or not cita:
+            ok.append((f"Diap. {n}: " if n else "") + alerta)
+            continue
+        frase = f" Frase: «{cita[:200]}»."
+        if not slides:  # sin la presentación a mano no se puede verificar
+            ok.append((f"Diap. {n}: " if n else "") + alerta + frase)
+            continue
+        if _contiene(slides.get(n, ""), cita):
+            ok.append(f"Diap. {n} (texto de la diapositiva): {alerta}{frase}")
+            continue
+        otra = next((k for k, t in slides.items() if _contiene(t, cita)), None)
+        if otra:
+            ok.append(f"Diap. {otra} (texto de la diapositiva): {alerta}{frase}")
+            continue
+        en_img = next((k for k, t in trans.items() if _contiene(t, cita)), None)
+        if en_img or "imag" in origen:
+            k = en_img or n
+            ok.append(f"Diap. {k} (leído en una imagen; verifíquelo haciendo zoom): {alerta}{frase}")
+            continue
+        fuera.append(alerta + frase)
+    r["alertas"] = ok
+    if fuera:
+        r["alertas_descartadas"] = fuera
+    return r
+
+
 def _bitacora_texto(bitacora):
     """Resumen de los vistos buenos y análisis de la bitácora, para contrastar con la PPT."""
     if not bitacora:
@@ -554,7 +621,7 @@ def _bitacora_texto(bitacora):
 
 def evaluar_avance(grupo, obj, px, transcripciones, fallidos, stats, imagenes=None):
     p = prompt_avance(grupo, obj, px, transcripciones, fallidos, stats, adjuntas=bool(imagenes))
-    return procesar_avance(llamar_json(p, imagenes=imagenes, esfuerzo="high", pesado=True), obj)
+    return procesar_avance(llamar_json(p, imagenes=imagenes, esfuerzo="high", pesado=True), obj, px, transcripciones)
 
 
 def prompt_avance(grupo, obj, px, transcripciones, fallidos, stats, manual=False, adjuntas=False):
@@ -590,13 +657,13 @@ Responde SOLO JSON. Primero llena la lista de verificación y después escribe l
  "criterios":[{{"id":"c1","nivel":3,"justificacion":"1 a 2 frases citando diapositivas"}}, …los 5…],
  "recomendaciones":["3 a 5 recomendaciones concretas y accionables para el grupo, con técnicas de esta competencia"],
  "oportunidades_mejora":[{{"obj":{obj},"oportunidad":"mejora para la empresa que se trabaja con las técnicas de este objetivo"}}],
- "alertas":["solo problemas de fondo: datos dudosos, cálculos que no cuadran, contenido que no corresponde al objetivo. No repitas aquí la extensión"],
+ "alertas":[{ALERTA_SCHEMA}],
  {EXT_SCHEMA}}}
 "problematicas_sugeridas" solo si este objetivo no aparece o su Aplicación técnica queda en nivel 1 o 2 (1 o 2 sugerencias); si no, deja la lista vacía."""
     return prompt
 
 
-def procesar_avance(r, obj=None):
+def procesar_avance(r, obj=None, px=None, trans=None):
     niveles = []
     just = []
     crit = {str(c.get("id")): c for c in (r.get("criterios") or [])}
@@ -623,12 +690,12 @@ def procesar_avance(r, obj=None):
     r["justificaciones"] = just
     r["oportunidades_mejora"] = _oportunidades(r.get("oportunidades_mejora"))
     _filtrar_problematicas(r)
-    return r
+    return verificar_alertas(r, px, trans)
 
 
 def evaluar_final(grupo, px, transcripciones, fallidos, stats, bitacora, imagenes=None):
     p = prompt_final(grupo, px, transcripciones, fallidos, stats, bitacora, adjuntas=bool(imagenes))
-    return procesar_final(llamar_json(p, imagenes=imagenes, esfuerzo="high", max_tokens=24000, pesado=True))
+    return procesar_final(llamar_json(p, imagenes=imagenes, esfuerzo="high", max_tokens=24000, pesado=True), px, transcripciones)
 
 
 def prompt_final(grupo, px, transcripciones, fallidos, stats, bitacora, manual=False, adjuntas=False):
@@ -666,13 +733,13 @@ Responde SOLO JSON. Para cada objetivo llena primero la lista de verificación y
 {{"objetivos":[{{"obj":1,"diapositivas":"10-14",{LISTA_SCHEMA},"niveles":{{"c1":3,"c2":2,"c3":3,"c4":2,"c5":3}},"justificacion":"por qué esos niveles, citando diapositivas","recomendaciones":["1 o 2 acciones concretas con técnicas de esta competencia"]}}, …los 8…],
  "recomendaciones_generales":["3 a 5 recomendaciones para todo el proyecto"],
  "oportunidades_mejora":[{{"obj":2,"oportunidad":"mejora para la empresa que se trabaja con las técnicas de ese objetivo"}}, …3 a 5…],
- "alertas":["solo problemas de fondo: datos dudosos, cálculos que no cuadran, objetivos totalmente ausentes, contenido copiado o que no es de la empresa. No repitas aquí la extensión ni la bitácora"],
+ "alertas":[{ALERTA_SCHEMA}],
  {EXT_SCHEMA}}}
 En "problematicas_sugeridas" incluye 1 o 2 por cada objetivo ausente o con Aplicación técnica en nivel 1 o 2."""
     return prompt
 
 
-def procesar_final(r):
+def procesar_final(r, px=None, trans=None):
     por_obj = {}
     for x in r.get("objetivos") or []:
         try:
@@ -700,7 +767,7 @@ def procesar_final(r):
     r["objetivos"] = objetivos
     r["oportunidades_mejora"] = _oportunidades(r.get("oportunidades_mejora"))
     _filtrar_problematicas(r)
-    return r
+    return verificar_alertas(r, px, trans)
 
 
 def _hay_diapositivas(v):
@@ -755,7 +822,7 @@ def imagenes_para_gemini(px, items, maximo=MAX_IMAGENES_GEMINI, lado=1024, calid
     out = []
     for it in elegidas:
         try:
-            out.append((f"Imagen de la diapositiva {it['slide']}:", a_jpeg(z.read(it["path"]), lado, calidad)))
+            out.append((f"Imagen de la diapositiva {it['slide']}:", a_jpeg(z.read(it["path"]), lado, calidad, crop=it.get("crop"))))
         except Exception:
             pass
     return out, len(items)

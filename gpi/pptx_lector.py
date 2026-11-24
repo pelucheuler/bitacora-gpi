@@ -87,13 +87,26 @@ def leer_pptx(data: bytes) -> dict:
                 nd = _xml(z, _resolver(base, r["t"]))
                 if nd is not None:
                     notas = re.sub(r"^\d+$", "", _texto(nd), flags=re.M).strip()
-        pics = sum(1 for _ in d.iter(f"{PN}pic"))
+        pics = 0
+        recortes = {}  # rId de la imagen -> recorte (izq, arriba, der, abajo) en fracción, como se ve en la diapositiva
+        for pic in d.iter(f"{PN}pic"):
+            pics += 1
+            blip = pic.find(f".//{A}blip")
+            rid = blip.get(f"{R}embed") if blip is not None else None
+            src = pic.find(f".//{A}srcRect")
+            if rid and src is not None and rid not in recortes:
+                try:
+                    c = tuple(int(src.get(k) or 0) / 100000 for k in ("l", "t", "r", "b"))
+                except ValueError:
+                    c = (0, 0, 0, 0)
+                if any(c):
+                    recortes[rid] = c
         charts = sum(1 for r in rl.values() if r["type"].endswith("/chart"))
-        for r in rl.values():
+        for rid, r in rl.items():
             if r["type"].endswith("/image") and r["mode"] != "External":
                 mp = _resolver(base, r["t"])
                 if re.search(r"\.(png|jpe?g|gif|webp|bmp)$", mp, re.I):
-                    media.append({"path": mp, "slide": i})
+                    media.append({"path": mp, "slide": i, "crop": recortes.get(rid)})
         slides.append({"n": i, "text": _texto(d), "notes": notas, "pics": pics, "charts": charts})
     return {"slides": slides, "media": media, "zip": z}
 
@@ -122,10 +135,18 @@ def imagenes_relevantes(px: dict) -> list:
     return items
 
 
-def a_jpeg(data: bytes, lado_max: int = 1600, calidad: int = 85) -> bytes:
-    """Reduce una imagen y la convierte a JPEG (fondo blanco para transparencias)."""
+def a_jpeg(data: bytes, lado_max: int = 1600, calidad: int = 85, crop=None) -> bytes:
+    """Reduce una imagen y la convierte a JPEG (fondo blanco para transparencias).
+    crop = (izq, arriba, der, abajo) en fracción: se recorta igual que en la diapositiva,
+    para que la IA no lea partes que el grupo ocultó."""
     im = Image.open(io.BytesIO(data))
     im.load()
+    if crop and any(crop):
+        w, h = im.size
+        l, t, r, b = (max(0.0, min(0.95, float(x or 0))) for x in crop)
+        caja = (int(l * w), int(t * h), int(w - r * w), int(h - b * h))
+        if caja[2] - caja[0] > 10 and caja[3] - caja[1] > 10:
+            im = im.crop(caja)
     if im.mode in ("RGBA", "LA", "P"):
         im = im.convert("RGBA")
         fondo = Image.new("RGB", im.size, (255, 255, 255))
