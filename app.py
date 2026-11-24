@@ -640,12 +640,12 @@ def revisar_con_claude(grupo, perfil, arch, tipo, obj, minutos):
             if tipo == "final":
                 if not r.get("objetivos"):
                     raise ia.IAError("La respuesta no trae la evaluación de los objetivos. Copie de nuevo la respuesta completa.")
-                r = ia.procesar_final(r)
+                r = ia.procesar_final(r, prep["px"])
                 n_prop, ap = nota_final(r["objetivos"]), aprueba_final(r["objetivos"])
             else:
                 if not r.get("criterios"):
                     raise ia.IAError("La respuesta no trae los criterios de la rúbrica. Copie de nuevo la respuesta completa.")
-                r = ia.procesar_avance(r)
+                r = ia.procesar_avance(r, None, prep["px"])
                 n_prop, ap = nota(r["niveles"]), aprueba(r["niveles"])
             r.update({"nota_propuesta": n_prop, "aprueba_propuesta": ap, "stats": prep["stats"],
                       "imagenes_leidas": 0, "lotes_fallidos": 0, "via": "claude.ai"})
